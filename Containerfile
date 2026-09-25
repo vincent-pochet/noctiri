@@ -25,6 +25,8 @@
 #    - @ublue-os/brew - Homebrew integration
 #
 # 2. Base Image Options (edit the FROM line below):
+#    - `ghcr.io/ublue-os/bluefin-dx` (Bluefin devex, GNOME desktop) -- this image
+#    - `ghcr.io/ublue-os/bluefin` (Bluefin, GNOME desktop) -- the same without devex
 #    - `quay.io/fedora-ostree-desktops/silverblue` (Fedora, GNOME desktop)
 #    - `quay.io/fedora-ostree-desktops/base-main` (Fedora, no desktop)
 #    - `quay.io/centos-bootc/centos-bootc:stream10` (CentOS-based)
@@ -48,9 +50,21 @@ COPY custom /custom
 COPY --from=common /system_files /oci/common
 COPY --from=brew /system_files /oci/brew
 
-# Base Image - GNOME included (Fedora official OSTree desktop)
+# Base Image - Bluefin's developer-experience variant.
+#
+# Inherits Bluefin's product layer (ujust recipes, Ptyxis, Bazaar, codec and
+# hardware enablement) plus the -dx developer stack. GNOME comes with it, and
+# build/60-niri-noctalia.sh removes it in favour of niri and Noctalia; nothing
+# -dx adds depends on GNOME, so dropping to plain `ghcr.io/ublue-os/bluefin`
+# is a one-line change.
+#
+# Basing here rather than on Silverblue means 10-overlay.sh re-applies
+# projectbluefin/common over a base that already has it. The rsync is
+# idempotent and this template's declarations still win. common/bluefin/ stays
+# un-overlaid as before: the base applied it, and it is mostly GNOME dconf.
+#
 # Renovate will keep the digest pin up to date.
-FROM quay.io/fedora-ostree-desktops/silverblue:44@sha256:cf819dd3c90524fa18965835d85df24c160785e24f93032429496e4a81e98592
+FROM ghcr.io/ublue-os/bluefin-dx:stable@sha256:6ae6823bc1ddcd791b0570571224324fe735345349491c934591619e02bc3341
 
 # Image identity - these define how bootc, fastfetch, and the ublue ecosystem
 # recognize your image. Change these to match your project name.
@@ -69,8 +83,9 @@ ARG VERSION=""
 ##   - Files from @projectbluefin/common at /oci/common (includes branding/artwork content)
 ##   - Files from @ublue-os/brew at /oci/brew
 ## Scripts run in the order of the RUN blocks below: image identity, runtime
-## overlays, default packages and services, then cleanup. An activated example
-## gets its own block between the package phase and the cleanup phase.
+## overlays, default packages and services, the desktop swap, then cleanup. An
+## activated example gets its own block between the package phase and the
+## cleanup phase.
 
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/boot \
@@ -105,6 +120,18 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/build/20-packages-and-services.sh
 
+### DESKTOP
+## Replaces the inherited GNOME desktop with niri and the Noctalia shell, and
+## swaps gdm -- which cannot outlive gnome-shell -- for greetd. After the
+## package phase so the removal sees a settled package set, before cleanup so
+## its verification runs against the image as it will ship.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache/libdnf5 \
+    --mount=type=cache,dst=/var/cache/rpm-ostree \
+    --mount=type=tmpfs,dst=/boot \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/build/60-niri-noctalia.sh
+
 ### CLEANUP
 ## Finalises package and Flatpak sources, then prunes build artifacts before
 ## linting. /run is deliberately not mounted as tmpfs here: the script must
@@ -128,10 +155,10 @@ RUN rm -rf /opt && ln -s /var/opt /opt
 ## builds and CI supply the dynamic values through `just build`; keeping these
 ## ARGs late prevents a new version or timestamp from invalidating package and
 ## overlay layers above.
-ARG IMAGE_DESC="My Customized Universal Blue Image"
+ARG IMAGE_DESC="Bluefin DX with the niri compositor and the Noctalia shell"
 ARG IMAGE_CREATED=""
 ARG IMAGE_LOGO_URL="https://avatars.githubusercontent.com/u/120078124?s=200&v=4"
-ARG IMAGE_KEYWORDS="bootc,ublue,universal-blue"
+ARG IMAGE_KEYWORDS="bootc,ublue,universal-blue,bluefin,niri,noctalia,wayland"
 ARG IMAGE_REF="main"
 ## The commit the image was built from. It is declared here, with the other
 ## volatile metadata, so a new commit only invalidates the label layer.
