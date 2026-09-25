@@ -1,14 +1,6 @@
-# finpilot
+# Noctiri
 
-A template for building your own bootc operating system image, assembled the
-same way Bluefin, Aurora, and Bluefin LTS are: from shared OCI layers rather
-than by modifying an existing image. The desktop configuration comes from
-[`projectbluefin/common`](https://github.com/projectbluefin/common), Homebrew
-from [`ublue-os/brew`](https://github.com/ublue-os/brew), and the rest is yours.
-
-It is built to be driven by hand or by an agent.
-
-> Be the one who moves, not the one who is moved.
+A bootc operating system, based on [Bluefin](https://github.com/ublue-os/bluefin) and using [Noctalia](https://github.com/noctalia-dev/noctalia) and [Niri](https://github.com/niri-wm/niri) wayland compositor & windows manager.
 
 ## What Makes this Raptor Different?
 
