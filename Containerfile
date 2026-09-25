@@ -25,7 +25,8 @@
 #    - @ublue-os/brew - Homebrew integration
 #
 # 2. Base Image Options (edit the FROM line below):
-#    - `ghcr.io/ublue-os/bluefin` (Bluefin, GNOME desktop) -- what this image uses
+#    - `ghcr.io/ublue-os/bluefin-dx` (Bluefin devex, GNOME desktop) -- this image
+#    - `ghcr.io/ublue-os/bluefin` (Bluefin, GNOME desktop) -- the same without devex
 #    - `quay.io/fedora-ostree-desktops/silverblue` (Fedora, GNOME desktop)
 #    - `quay.io/fedora-ostree-desktops/base-main` (Fedora, no desktop)
 #    - `quay.io/centos-bootc/centos-bootc:stream10` (CentOS-based)
@@ -49,12 +50,20 @@ COPY custom /custom
 COPY --from=common /system_files /oci/common
 COPY --from=brew /system_files /oci/brew
 
-# Base Image - Bluefin itself, not the Fedora Silverblue the template shipped.
+# Base Image - Bluefin's developer-experience variant, not the Fedora
+# Silverblue the template shipped.
 #
 # Bluefin is the product this image wants to inherit: its ujust recipes, its
 # fastfetch and Bazaar configuration, ptyxis, and the hardware and codec
-# enablement it layers on Silverblue. It arrives with GNOME, which
+# enablement it layers on Silverblue. The -dx variant adds the developer
+# tooling on top -- the container and virtualisation stack, the compilers and
+# language runtimes, and the devcontainer plumbing -- which is why it is the
+# base rather than plain `bluefin`. Both arrive with GNOME, which
 # build/60-niri-noctalia.sh then removes in favour of niri and Noctalia.
+#
+# Dropping to plain `ghcr.io/ublue-os/bluefin` is a one-line change: the
+# desktop phase touches nothing -dx adds, so the removal list and the
+# verification block hold either way.
 #
 # Consequences of basing here rather than on Silverblue, both deliberate:
 #   - 10-overlay.sh re-applies projectbluefin/common's shared layer over a base
@@ -65,7 +74,7 @@ COPY --from=brew /system_files /oci/brew
 #     GNOME to configure.
 #
 # Renovate will keep the digest pin up to date.
-FROM ghcr.io/ublue-os/bluefin:stable@sha256:76aa5d6f4f2f3e18b244587bfbd45ae1777a7d0934f869534228eab6af1f0101
+FROM ghcr.io/ublue-os/bluefin-dx:stable@sha256:6ae6823bc1ddcd791b0570571224324fe735345349491c934591619e02bc3341
 
 # Image identity - these define how bootc, fastfetch, and the ublue ecosystem
 # recognize your image. Change these to match your project name.
@@ -157,7 +166,7 @@ RUN rm -rf /opt && ln -s /var/opt /opt
 ## builds and CI supply the dynamic values through `just build`; keeping these
 ## ARGs late prevents a new version or timestamp from invalidating package and
 ## overlay layers above.
-ARG IMAGE_DESC="Bluefin with the niri compositor and the Noctalia shell"
+ARG IMAGE_DESC="Bluefin DX with the niri compositor and the Noctalia shell"
 ARG IMAGE_CREATED=""
 ARG IMAGE_LOGO_URL="https://avatars.githubusercontent.com/u/120078124?s=200&v=4"
 ARG IMAGE_KEYWORDS="bootc,ublue,universal-blue,bluefin,niri,noctalia,wayland"

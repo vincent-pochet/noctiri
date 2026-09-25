@@ -34,11 +34,11 @@
       "automergeStrategy": "squash"
     },
     {
-      "description": "Keep first-party and base OCI images fresh immediately. ghcr.io/ublue-os/bluefin is this image's actual base; the rest are the alternatives the Containerfile documents: Fedora, CentOS and Hummingbird.",
+      "description": "Keep first-party and base OCI images fresh immediately. ghcr.io/ublue-os/bluefin-dx is this image's actual base; the rest are the alternatives the Containerfile documents: Fedora, CentOS and Hummingbird.",
       "matchDepNames": [
         "ghcr.io/projectbluefin/common",
         "ghcr.io/ublue-os/brew",
-        "ghcr.io/ublue-os/bluefin",
+        "ghcr.io/ublue-os/bluefin-dx",
         "quay.io/fedora-ostree-desktops/*",
         "quay.io/centos-bootc/*",
         "quay.io/hummingbird-community/*"

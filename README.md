@@ -1,16 +1,39 @@
 # Noctiri
 
-A bootc operating system based on [Bluefin](https://github.com/ublue-os/bluefin),
-running the [niri](https://github.com/niri-wm/niri) scrolling Wayland compositor
-and the [Noctalia](https://github.com/noctalia-dev/noctalia) shell in place of
-Bluefin's GNOME desktop.
+A bootc operating system based on
+[Bluefin DX](https://docs.projectbluefin.io/bluefin-dx/), running the
+[niri](https://github.com/niri-wm/niri) scrolling Wayland compositor and the
+[Noctalia](https://github.com/noctalia-dev/noctalia) shell in place of Bluefin's
+GNOME desktop.
 
-## What makes this different from Bluefin
+## What makes this different from Bluefin DX
 
-This image is `ghcr.io/ublue-os/bluefin:stable` with its desktop replaced. It
+This image is `ghcr.io/ublue-os/bluefin-dx:stable` with its desktop replaced. It
 keeps everything Bluefin puts *around* the desktop — the `ujust` recipes, the
 Homebrew and Flatpak plumbing, `uupd`'s update policy, the codec and hardware
 enablement, Ptyxis, Bazaar — and swaps the session itself.
+
+### The developer tooling
+
+`-dx` is Bluefin's developer-experience variant, and this image inherits all of
+it untouched: Docker CE and the Compose/Buildx plugins, the Podman extras
+(`podman-compose`, `podman-tui`, `podman-machine`), the full libvirt/QEMU stack
+with `virt-manager` and `virt-install`, Incus and LXC, VS Code, Cockpit, the
+tracing and debugging tools (`bpftrace`, `bcc`, `systemtap`, `sysprof`,
+`gdb`, `strace`), LLVM/Clang, ROCm, `kernel-devel`, `flatpak-builder`,
+`osbuild`, `git-lfs` and the devcontainer plumbing — around 420 packages that
+plain `bluefin` does not carry.
+
+Before using Docker or libvirt without `sudo`:
+
+```bash
+ujust configure-dev-groups
+```
+
+None of it depends on GNOME: the removal below takes exactly the same 19
+packages out of `bluefin-dx` as it does out of `bluefin`, so the desktop swap
+and the developer stack are independent. If you want the smaller image, change
+the `FROM` line to `ghcr.io/ublue-os/bluefin` — nothing else needs to move.
 
 The swap happens in one build phase,
 [`build/60-niri-noctalia.sh`](build/60-niri-noctalia.sh).
@@ -195,7 +218,7 @@ knowing about:
 ## Customize
 
 Pick your base image on the `Containerfile`'s `FROM` line; this image uses
-`ghcr.io/ublue-os/bluefin:stable`. That line is the only place the base is
+`ghcr.io/ublue-os/bluefin-dx:stable`. That line is the only place the base is
 chosen: `just build` reads the image name and the tag from it, and the Fedora
 major comes from the base image itself during the build. Moving off a
 GNOME-based base means `build/60-niri-noctalia.sh`'s removal list no longer
