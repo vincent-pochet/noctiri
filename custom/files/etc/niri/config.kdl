@@ -1,28 +1,22 @@
 // Noctiri's default niri configuration.
 //
-// niri reads, in order: $XDG_CONFIG_HOME/niri/config.kdl, then this file. A
-// user who wants to change anything copies it into their home rather than
-// editing it here, because /etc is three-way merged on every image update:
+// niri reads ~/.config/niri/config.kdl first and this file only as a fallback.
+// To change anything, run `ujust niri-edit-config` rather than editing here:
+// /etc is three-way merged on every image update.
 //
-//     ujust niri-edit-config
+// Derived from niri's default-config.kdl and rewired for Noctalia, which
+// supplies the bar, launcher, notifications, lock screen and settings UI.
+// The build runs `niri validate` against this file, so a syntax error fails
+// the image rather than the first login.
 //
-// This is derived from niri's own default-config.kdl, trimmed of its tutorial
-// commentary and rewired for Noctalia, which supplies the bar, launcher,
-// notifications, lock screen, wallpaper, clipboard history and settings UI.
-// Those are the binds that differ from upstream; everything else is stock niri.
-//
-// build/60-niri-noctalia.sh runs `niri validate` against this file at build
-// time, so a syntax error fails the image build rather than the first login.
-//
-// Format: KDL (https://kdl.dev). "/-" comments out the node that follows.
+// KDL format (https://kdl.dev); "/-" comments out the node that follows.
 // Reference: https://niri-wm.github.io/niri/Configuration:-Introduction
 
 input {
     keyboard {
         xkb {
-            // Left empty on purpose: niri then takes the layout from
-            // org.freedesktop.locale1, which is what the installer set and
-            // what `localectl set-x11-keymap` changes.
+            // Empty on purpose: niri then takes the layout from locale1,
+            // which is what `localectl set-x11-keymap` changes.
         }
 
         numlock
@@ -41,9 +35,8 @@ input {
     // focus-follows-mouse max-scroll-amount="0%"
 }
 
-// Outputs are named by connector. `niri msg outputs` lists them on a running
-// session; Noctalia's settings panel writes the same thing through its own
-// monitor configuration, so prefer that over editing this by hand.
+// Outputs are named by connector; `niri msg outputs` lists them. Noctalia's
+// settings panel configures monitors too, which is usually easier than this.
 /-output "eDP-1" {
     mode "1920x1080@60.000"
     scale 1.0
@@ -90,13 +83,11 @@ layout {
     }
 }
 
-// Noctalia is the desktop shell: bar, dock, launcher, notifications, control
-// centre, wallpaper and lock screen. niri starts it, which is what upstream
-// Noctalia recommends over an XDG autostart entry, so it comes up with the
-// session and goes down with it.
+// niri starts the shell, as upstream Noctalia recommends over an XDG
+// autostart entry: it comes up with the session and goes down with it.
 spawn-at-startup "noctalia"
 
-// Wayland-native rendering for Electron apps rather than the XWayland fallback.
+// Wayland-native rendering for Electron apps instead of the XWayland fallback.
 environment {
     ELECTRON_OZONE_PLATFORM_HINT "auto"
 }
@@ -107,17 +98,15 @@ hotkey-overlay {
 
 prefer-no-csd
 
-// niri's own screenshot UI writes here. Noctalia's screenshot panel has its
-// own setting, in its settings UI.
+// niri's own screenshot UI writes here; Noctalia's panel has its own setting.
 screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
 
 animations {
     // off
 }
 
-// Noctalia draws its own surfaces. Floating keeps its windows out of the
-// scrolling strip, and the backdrop rule lets its wallpaper layer sit behind
-// the workspaces in the Overview instead of covering them.
+// Floating keeps Noctalia's windows out of the scrolling strip; the backdrop
+// rule puts its wallpaper behind the workspaces in the Overview.
 window-rule {
     match app-id=r#"^dev\.noctalia\.Noctalia$"#
     open-floating true
@@ -128,14 +117,13 @@ layer-rule {
     place-within-backdrop true
 }
 
-// Noctalia's launcher and panels are layer-shell surfaces opened from an IPC
-// call rather than a click, so they have no activation token niri would accept.
+// Noctalia's panels open from an IPC call, not a click, so they carry no
+// activation token niri would otherwise accept.
 debug {
     honor-xdg-activation-with-invalid-serial
 }
 
-// Open the Firefox picture-in-picture player floating. Matches both the host
-// and the Flatpak app-id.
+// Firefox picture-in-picture, floating. Matches host and Flatpak app-ids.
 window-rule {
     match app-id=r#"firefox$"# title="^Picture-in-Picture$"
     open-floating true
@@ -146,8 +134,7 @@ binds {
 
     Mod+Shift+Slash { show-hotkey-overlay; }
 
-    // Applications. Mod+D and Mod+Space both reach Noctalia's launcher: Mod+D
-    // is where niri's default config puts it, Mod+Space is Noctalia's own.
+    // Mod+D is niri's default launcher bind, Mod+Space is Noctalia's own.
     Mod+T hotkey-overlay-title="Open a Terminal: Ghostty" { spawn "ghostty"; }
     Mod+E hotkey-overlay-title="Open the File Manager: Files" { spawn "nautilus" "--new-window"; }
     Mod+D hotkey-overlay-title="Run an Application: Noctalia" { spawn "noctalia" "msg" "panel-toggle" "launcher"; }
@@ -163,7 +150,7 @@ binds {
     // Screen reader toggle, as upstream ships it.
     Super+Alt+S allow-when-locked=true hotkey-overlay-title=null { spawn-sh "pkill orca || exec orca"; }
 
-    // Volume, mic and media through Noctalia so its OSD shows the change.
+    // Through Noctalia so its OSD shows the change.
     XF86AudioRaiseVolume allow-when-locked=true { spawn "noctalia" "msg" "volume-up"; }
     XF86AudioLowerVolume allow-when-locked=true { spawn "noctalia" "msg" "volume-down"; }
     XF86AudioMute        allow-when-locked=true { spawn "noctalia" "msg" "volume-mute"; }
@@ -174,8 +161,7 @@ binds {
     XF86AudioPrev allow-when-locked=true { spawn "noctalia" "msg" "media" "previous"; }
     XF86AudioNext allow-when-locked=true { spawn "noctalia" "msg" "media" "next"; }
 
-    // Backlight through Noctalia too: it drives sysfs backlights and, via
-    // ddcutil, external monitors, which brightnessctl alone does not.
+    // Noctalia drives sysfs backlights and, via ddcutil, external monitors.
     XF86MonBrightnessUp   allow-when-locked=true { spawn "noctalia" "msg" "brightness-up"; }
     XF86MonBrightnessDown allow-when-locked=true { spawn "noctalia" "msg" "brightness-down"; }
     XF86KbdBrightnessUp   allow-when-locked=true { spawn "noctalia" "msg" "keyboard-backlight-up"; }
@@ -282,9 +268,7 @@ binds {
     Mod+BracketLeft  { consume-or-expel-window-left; }
     Mod+BracketRight { consume-or-expel-window-right; }
 
-    // Upstream puts consume-window-into-column on Mod+Comma; Noctalia's
-    // settings window has that bind here, so the column action moves to
-    // Mod+Shift+Comma and keeps its pair on Mod+Period.
+    // Upstream puts this on Mod+Comma, which Noctalia's settings now uses.
     Mod+Shift+Comma { consume-window-into-column; }
     Mod+Period      { expel-window-from-column; }
 
@@ -311,18 +295,18 @@ binds {
 
     Mod+W { toggle-column-tabbed-display; }
 
-    // niri's built-in screenshot UI. Noctalia's own screenshot panel is on
-    // Mod+Shift+Print, for its annotation tools and its save-or-copy prompt.
+    // niri's built-in screenshot UI; Noctalia's panel, with annotation and a
+    // save-or-copy prompt, is on Mod+Shift+Print.
     Print { screenshot; }
     Ctrl+Print { screenshot-screen; }
     Alt+Print { screenshot-window; }
     Mod+Shift+Print { spawn "noctalia" "msg" "screenshot-region"; }
 
-    // Escape hatch for clients that ask niri to stop handling shortcuts.
+    // Escape hatch for clients that inhibit shortcuts.
     Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
 
-    // Session end. niri shows its own confirmation dialog before quitting.
-    // Suspend, reboot and power off live in Noctalia's control centre.
+    // niri confirms before quitting. Suspend, reboot and power off are in
+    // Noctalia's control centre.
     Mod+Shift+E { quit; }
     Ctrl+Alt+Delete { quit; }
 

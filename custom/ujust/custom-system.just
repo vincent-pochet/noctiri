@@ -143,10 +143,8 @@ niri-edit-config:
     set -euo pipefail
 
     # niri reads ~/.config/niri/config.kdl first and /etc/niri/config.kdl only
-    # as a fallback, so editing the image's copy is the wrong move twice over:
-    # /etc is three-way merged on every image update, and a conflict there is
-    # resolved by ostree rather than by the user. Taking a copy makes the file
-    # unambiguously the user's, and reverting is deleting it again.
+    # as a fallback. Editing the image's copy is the wrong move: /etc is
+    # three-way merged on every image update. Reverting is deleting the copy.
     SYSTEM_CONFIG=/etc/niri/config.kdl
     USER_CONFIG="${XDG_CONFIG_HOME:-${HOME}/.config}/niri/config.kdl"
 
@@ -165,8 +163,7 @@ niri-edit-config:
 
     "${EDITOR:-nano}" "${USER_CONFIG}"
 
-    # niri applies a valid config the moment it is written, and keeps running
-    # the previous one when it is not. Say which happened.
+    # niri applies a valid config on write and keeps the previous one otherwise.
     if niri validate --config "${USER_CONFIG}"; then
         echo "Configuration is valid; niri has already reloaded it."
     else

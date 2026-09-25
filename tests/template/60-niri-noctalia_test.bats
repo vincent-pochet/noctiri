@@ -1,16 +1,13 @@
 #!/usr/bin/env bats
 # Unit tests for build/60-niri-noctalia.sh.
 #
-# This phase is the one that can leave the image unbootable: it removes the
-# desktop and the greeter the base image booted with, and nothing downstream of
-# it would notice a session file or a portal backend going missing. So the
-# assertions here are mostly about its guard rails -- that the verification
-# block really does fail the build -- rather than about the package list.
+# This phase can leave the image unbootable, and nothing downstream would
+# notice a missing session file or portal backend, so most assertions are about
+# its guard rails rather than its package list.
 #
-# Each test rewrites a throwaway copy of the script so /ctx, /etc and /usr
-# point into a sandbox, then stubs the commands it shells out to. sed, test,
-# mkdir and rm are left real, so the os-release edit and the theme lookup are
-# exercised against files this repository really ships.
+# Each test rewrites a throwaway copy so /ctx, /etc and /usr point into a
+# sandbox, then stubs what the script shells out to. sed, test, mkdir and rm
+# stay real.
 #
 # Run with: bats tests/template/60-niri-noctalia_test.bats
 
@@ -37,8 +34,7 @@ setup() {
 	# Sourced verbatim, so a syntax break in the real helper fails here too.
 	cp "${REPO_ROOT}/build/copr-helpers.sh" "${CTX}/build/copr-helpers.sh"
 
-	# The image tree the script expects to find, as the base image and the
-	# overlay phase would have left it.
+	# The tree the script expects, as the base image and overlay phase leave it.
 	mkdir -p \
 		"${ROOT}/usr/share/wayland-sessions" \
 		"${ROOT}/usr/share/xdg-desktop-portal" \
@@ -61,7 +57,7 @@ setup() {
 	ln -sf /usr/lib/systemd/system/gdm.service \
 		"${ROOT}/etc/systemd/system/display-manager.service"
 
-	# The greeter's side of the image, as the noctalia-greeter package leaves it.
+	# The greeter's side, as the noctalia-greeter package leaves it.
 	local binary
 	for binary in noctalia-greeter noctalia-greeter-session \
 		noctalia-greeter-compositor noctalia-greeter-apply-appearance; do
@@ -70,8 +66,7 @@ setup() {
 	done
 	: >"${ROOT}/usr/share/polkit-1/actions/org.noctalia.greeter.apply-appearance.policy"
 
-	# The vendor's PAM helper, stubbed to do what the real one does to Fedora's
-	# file: add the session line, and leave a timestamped backup behind.
+	# The vendor's PAM helper: adds the session line, leaves a backup.
 	cat >"${ROOT}/usr/share/noctalia-greeter/setup_greetd_pam.sh" <<EOF
 #!/usr/bin/bash
 printf 'session    required     pam_systemd.so\n' >> "${ROOT}/etc/pam.d/greetd"
@@ -82,8 +77,7 @@ EOF
 	printf 'session    include     postlogin\n' >"${ROOT}/etc/pam.d/greetd"
 
 	# Line 1 is excluded so the shebang keeps pointing at the real /usr/bin/env.
-	# Both forms matter: a path mid-line, and a bare command at column 0 with
-	# no character in front of it to anchor on.
+	# Both forms matter: mid-line, and a bare command at column 0.
 	sed -e "s#/ctx/#${CTX}/#g" \
 		-e "1!s#^\\(/etc/\\|/usr/\\)#${ROOT}\\1#" \
 		-e "1!s#\\([^[:alnum:]_.-]\\)/etc/#\\1${ROOT}/etc/#g" \
@@ -93,9 +87,8 @@ EOF
 	export PATH="${STUB_BIN}:${PATH}"
 	export DNF5_LOG SYSTEMCTL_LOG RPM_LOG NIRI_LOG NOCTALIA_LOG CURL_LOG
 
-	# curl writes the key file the script then fingerprints; gpg reports the
-	# fingerprint this repository pins for Fedora 44. TERRA_FINGERPRINT lets a
-	# test make them disagree.
+	# curl writes the key the script fingerprints; gpg reports the pinned one.
+	# TERRA_FINGERPRINT lets a test make them disagree.
 	: "${TERRA_FINGERPRINT:=AE09157A4DE88B497EA1D5D300CDAB43DE226D6F}"
 	export TERRA_FINGERPRINT
 	cat >"${STUB_BIN}/curl" <<'EOF'
@@ -136,8 +129,7 @@ teardown() {
 }
 
 @test "60-niri-noctalia: sandbox rewrite left no writes to the real filesystem" {
-	# Guards the rewrite above. If a path in the script stops matching, the
-	# suite would start editing the host's /etc and /usr for real.
+	# Guards the rewrite: an unmatched path would edit the host for real.
 	run grep -nE '(^|[^-[:alnum:]])/ctx/' "${SCRIPT}"
 	[ "$status" -ne 0 ]
 
@@ -165,15 +157,13 @@ teardown() {
 	run bash "${SCRIPT}"
 	[ "$status" -eq 0 ]
 
-	# niri without xwayland-satellite gives no X11 apps, and niri without
-	# noctalia gives a session with no bar, launcher or lock screen. Weak deps
-	# are off for the whole build, so each has to be named.
+	# Weak deps are off, so each has to be named: no xwayland-satellite means
+	# no X11 apps, no noctalia means no bar, launcher or lock screen.
 	grep -qE '^install -y niri xwayland-satellite noctalia sound-theme-freedesktop$' "${DNF5_LOG}"
 }
 
 @test "60-niri-noctalia: installs Ghostty from its COPR in isolation" {
-	# Ghostty is the one package not in Fedora's repositories. The COPR must be
-	# enabled for the transaction only, never left enabled in the image.
+	# The COPR must be enabled for the transaction only, never in the image.
 	run bash "${SCRIPT}"
 	[ "$status" -eq 0 ]
 
@@ -186,8 +176,8 @@ teardown() {
 	run bash "${SCRIPT}"
 	[ "$status" -eq 0 ]
 
-	# gdm hard-requires gnome-shell and gnome-session, so it cannot be kept.
-	# Leaving either -session package would keep advertising a dead session.
+	# gdm cannot be kept, and a surviving -session package would keep
+	# advertising a session that can no longer start.
 	local removal
 	removal="$(grep -E '^remove -y ' "${DNF5_LOG}")"
 	for package in gnome-shell mutter gnome-session gnome-session-wayland-session \
@@ -200,9 +190,8 @@ teardown() {
 }
 
 @test "60-niri-noctalia: keeps the packages the niri session still needs" {
-	# nautilus, the portal backends and gnome-keyring all survive the GNOME
-	# removal, and the config and the portal file both name them. A future
-	# widening of the removal list must not quietly take them.
+	# These survive the GNOME removal and are named by the config and the
+	# portal file. A wider removal list must not quietly take them.
 	local removal
 	run bash "${SCRIPT}"
 	[ "$status" -eq 0 ]
@@ -272,14 +261,12 @@ EOF
 }
 
 @test "60-niri-noctalia: restricts Terra to the greeter alone" {
-	# Terra also carries noctalia, noctalia-nightly, noctalia-qs and
-	# noctalia-legacy, and its noctalia is older than the one Fedora ships. An
-	# unrestricted Terra could downgrade the shell out from under the session.
+	# Terra's own noctalia is older than Fedora's; unrestricted, it could
+	# downgrade the shell out from under the session.
 	run bash "${SCRIPT}"
 	[ "$status" -eq 0 ]
 
-	# The repository file is written, used, then removed, so assert on the
-	# content the script produced before deleting it.
+	# The file is written, used, then removed: assert on the script's content.
 	grep -q 'includepkgs=noctalia-greeter' <(sed -n '/^\[terra\]/,/^EOF$/p' "${SCRIPT}")
 	grep -q 'gpgcheck=1' <(sed -n '/^\[terra\]/,/^EOF$/p' "${SCRIPT}")
 }
@@ -288,8 +275,7 @@ EOF
 	run bash "${SCRIPT}"
 	[ "$status" -eq 0 ]
 
-	# A build-time source only: an enabled Terra in the shipped image would let
-	# a later `dnf5 install` reach it.
+	# A build-time source only; an enabled Terra would outlive the build.
 	[ ! -e "${ROOT}/etc/yum.repos.d/terra.repo" ]
 }
 
@@ -297,8 +283,7 @@ EOF
 	run bash "${SCRIPT}"
 	[ "$status" -eq 0 ]
 
-	# Terra publishes no .repo file to inherit, so the key is fetched over
-	# HTTPS and checked rather than trusted on first use.
+	# No .repo file to inherit, so the key is checked, not trusted on sight.
 	grep -q 'repos.fyralabs.com/terra44/key.asc' "${CURL_LOG}"
 	grep -q 'proto =https' "${CURL_LOG}"
 }
@@ -313,8 +298,7 @@ EOF
 }
 
 @test "60-niri-noctalia: fails on a Fedora release whose key is not pinned" {
-	# Terra signs each Fedora release with a different key. A rebase must stop
-	# here for a human rather than silently trusting whatever is served.
+	# Each Fedora release gets a different key, so a rebase stops for a human.
 	sed -i 's/^VERSION_ID=44$/VERSION_ID=99/' "${ROOT}/usr/lib/os-release"
 
 	run bash "${SCRIPT}"
@@ -323,8 +307,7 @@ EOF
 }
 
 @test "60-niri-noctalia: fails when the greeter's session wrapper is missing" {
-	# greetd must run the wrapper, not the greeter binary: the wrapper is what
-	# starts the bundled compositor the greeter draws inside.
+	# The wrapper starts the bundled compositor the greeter draws inside.
 	rm -f "${ROOT}/usr/bin/noctalia-greeter-session"
 	run bash "${SCRIPT}"
 	[ "$status" -ne 0 ]
@@ -337,15 +320,14 @@ EOF
 }
 
 @test "60-niri-noctalia: fails when the greeter's runtime assets are missing" {
-	# Without the assets tree the greeter starts with no fonts, icons or UI.
+	# Without it the greeter starts with no fonts, icons or UI.
 	rm -rf "${ROOT}/usr/share/noctalia-greeter/assets"
 	run bash "${SCRIPT}"
 	[ "$status" -ne 0 ]
 }
 
 @test "60-niri-noctalia: fails when the appearance-sync Polkit action is missing" {
-	# Without it, `noctalia msg greeter-sync` cannot push the session's
-	# wallpaper and palette to the greeter.
+	# Without it `greeter-sync` cannot apply the session's theme.
 	rm -f "${ROOT}/usr/share/polkit-1/actions/org.noctalia.greeter.apply-appearance.policy"
 	run bash "${SCRIPT}"
 	[ "$status" -ne 0 ]
@@ -357,20 +339,17 @@ EOF
 
 	local config="${ROOT}/etc/greetd/config.toml"
 	[ -f "${config}" ]
-	# The sandbox rewrite reaches inside the heredoc too, so the generated file
-	# carries a prefixed path; assert the wrapper it ends at, and read the
-	# absolute path the image will really get from the script itself.
+	# The rewrite reaches inside the heredoc, so the generated file carries a
+	# prefixed path; the real one comes from the script.
 	grep -qE '^command = ".*/noctalia-greeter-session"$' "${config}"
 	grep -qx 'command = "/usr/bin/noctalia-greeter-session"' "${BUILD_SRC}"
-	# The greetd package already creates this account; upstream's `greeter`
-	# would be a duplicate of it on Fedora.
+	# greetd already creates this account; upstream's `greeter` would duplicate it.
 	grep -qx 'user = "greetd"' "${config}"
 	grep -qx 'vt = 1' "${config}"
 }
 
 @test "60-niri-noctalia: gives greetd's PAM stack a logind session" {
-	# The greeter needs a logind session to reach the seat's DRM and input
-	# devices. Fedora only reaches pam_systemd through system-auth, optionally.
+	# The greeter needs a logind session to reach the seat's devices.
 	run bash "${SCRIPT}"
 	[ "$status" -eq 0 ]
 
@@ -387,8 +366,7 @@ EOF
 }
 
 @test "60-niri-noctalia: ships no PAM backup in the image" {
-	# The vendor helper leaves a timestamped copy. Every build starts from the
-	# same base layer, so it has nothing to restore and would differ per build.
+	# The helper leaves a timestamped copy with nothing to restore.
 	run bash "${SCRIPT}"
 	[ "$status" -eq 0 ]
 
@@ -397,8 +375,7 @@ EOF
 }
 
 @test "60-niri-noctalia: enables the unit that creates the greeter's state directory" {
-	# /var/lib/noctalia-greeter cannot ship inside the image: 90-cleanup.sh
-	# prunes /var. It has to be created on the booted machine, before greetd.
+	# 90-cleanup.sh prunes /var, so the directory is made on the booted machine.
 	run bash "${SCRIPT}"
 	[ "$status" -eq 0 ]
 
@@ -412,8 +389,7 @@ EOF
 	grep -qx 'Before=greetd.service' "${unit}"
 	grep -qx 'Type=oneshot' "${unit}"
 	grep -qx 'WantedBy=graphical.target' "${unit}"
-	# The helper guesses the greeter account from the state directory's owner,
-	# which does not exist yet on the run that creates it.
+	# The helper would otherwise guess from an owner that does not exist yet.
 	grep -qx 'Environment=GREETER_USER=greetd' "${unit}"
 }
 
@@ -430,9 +406,8 @@ EOF
 }
 
 @test "60-niri-noctalia: clears the dangling display-manager alias before enabling greetd" {
-	# gdm's removal leaves /etc/systemd/system/display-manager.service pointing
-	# at a unit that no longer exists; systemctl will not replace an existing
-	# symlink, so enabling greetd over it boots to no greeter at all.
+	# systemctl will not replace an existing symlink, so a dangling alias from
+	# gdm would boot to no greeter at all.
 	[ -L "${ROOT}/etc/systemd/system/display-manager.service" ]
 
 	run bash "${SCRIPT}"

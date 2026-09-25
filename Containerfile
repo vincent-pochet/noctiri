@@ -50,28 +50,18 @@ COPY custom /custom
 COPY --from=common /system_files /oci/common
 COPY --from=brew /system_files /oci/brew
 
-# Base Image - Bluefin's developer-experience variant, not the Fedora
-# Silverblue the template shipped.
+# Base Image - Bluefin's developer-experience variant.
 #
-# Bluefin is the product this image wants to inherit: its ujust recipes, its
-# fastfetch and Bazaar configuration, ptyxis, and the hardware and codec
-# enablement it layers on Silverblue. The -dx variant adds the developer
-# tooling on top -- the container and virtualisation stack, the compilers and
-# language runtimes, and the devcontainer plumbing -- which is why it is the
-# base rather than plain `bluefin`. Both arrive with GNOME, which
-# build/60-niri-noctalia.sh then removes in favour of niri and Noctalia.
+# Inherits Bluefin's product layer (ujust recipes, Ptyxis, Bazaar, codec and
+# hardware enablement) plus the -dx developer stack. GNOME comes with it, and
+# build/60-niri-noctalia.sh removes it in favour of niri and Noctalia; nothing
+# -dx adds depends on GNOME, so dropping to plain `ghcr.io/ublue-os/bluefin`
+# is a one-line change.
 #
-# Dropping to plain `ghcr.io/ublue-os/bluefin` is a one-line change: the
-# desktop phase touches nothing -dx adds, so the removal list and the
-# verification block hold either way.
-#
-# Consequences of basing here rather than on Silverblue, both deliberate:
-#   - 10-overlay.sh re-applies projectbluefin/common's shared layer over a base
-#     that already carries it. The rsync is idempotent and the template's own
-#     declarations still win, which is the point of the phase ordering.
-#   - common/bluefin/ stays un-overlaid, as it always was. The base image
-#     already applied it, and most of it is GNOME dconf that no longer has a
-#     GNOME to configure.
+# Basing here rather than on Silverblue means 10-overlay.sh re-applies
+# projectbluefin/common over a base that already has it. The rsync is
+# idempotent and this template's declarations still win. common/bluefin/ stays
+# un-overlaid as before: the base applied it, and it is mostly GNOME dconf.
 #
 # Renovate will keep the digest pin up to date.
 FROM ghcr.io/ublue-os/bluefin-dx:stable@sha256:6ae6823bc1ddcd791b0570571224324fe735345349491c934591619e02bc3341
@@ -131,11 +121,10 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     /ctx/build/20-packages-and-services.sh
 
 ### DESKTOP
-## Replaces the GNOME desktop inherited from the Bluefin base with the niri
-## compositor and the Noctalia shell, and swaps gdm -- which cannot outlive
-## gnome-shell -- for greetd. It runs after the package phase so the desktop
-## removal sees a settled package set, and before cleanup so its verification
-## steps run against the image as it will ship.
+## Replaces the inherited GNOME desktop with niri and the Noctalia shell, and
+## swaps gdm -- which cannot outlive gnome-shell -- for greetd. After the
+## package phase so the removal sees a settled package set, before cleanup so
+## its verification runs against the image as it will ship.
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=cache,dst=/var/cache/libdnf5 \
     --mount=type=cache,dst=/var/cache/rpm-ostree \

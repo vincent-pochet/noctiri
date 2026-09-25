@@ -1,23 +1,14 @@
 # Lay out Noctalia Greeter's state directory on the booted system.
 #
-# The greeter keeps greeter.toml and sync.toml in /var/lib/noctalia-greeter.
-# build/90-cleanup.sh prunes /var, so that directory cannot be shipped inside
-# the image -- it has to be created on the machine, once, before greetd first
-# starts. noctalia-greeter-apply-appearance --setup-system is the vendor's own
-# helper for exactly that: it creates the directory, writes a default
-# greeter.toml and sync.toml, and chowns them to the greeter account.
-#
-# GREETER_USER names greetd's service account, matching the `user` in
-# /etc/greetd/config.toml. The helper would otherwise guess from the state
-# directory's owner, which does not exist yet on the run that creates it.
+# The greeter keeps greeter.toml and sync.toml in /var/lib/noctalia-greeter,
+# which cannot ship in the image because build/90-cleanup.sh prunes /var.
+# GREETER_USER matches the `user` in /etc/greetd/config.toml; the helper would
+# otherwise guess it from the directory's owner, which does not exist yet.
 
 [Unit]
 Description=Initialise the Noctalia Greeter state directory
 Documentation=https://docs.noctalia.dev
-# Nothing to do once the greeter has its configuration. Re-running would not
-# overwrite it, but skipping keeps the boot path quiet.
 ConditionPathExists=!/var/lib/noctalia-greeter/greeter.toml
-# The greeter reads this directory as it starts, so it has to exist first.
 Before=greetd.service
 After=local-fs.target
 RequiresMountsFor=/var/lib
