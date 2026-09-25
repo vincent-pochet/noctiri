@@ -1,52 +1,176 @@
 # Noctiri
 
-A bootc operating system, based on [Bluefin](https://github.com/ublue-os/bluefin) and using [Noctalia](https://github.com/noctalia-dev/noctalia) and [Niri](https://github.com/niri-wm/niri) wayland compositor & windows manager.
+A bootc operating system based on [Bluefin](https://github.com/ublue-os/bluefin),
+running the [niri](https://github.com/niri-wm/niri) scrolling Wayland compositor
+and the [Noctalia](https://github.com/noctalia-dev/noctalia) shell in place of
+Bluefin's GNOME desktop.
 
-## What Makes this Raptor Different?
+## What makes this different from Bluefin
 
-Here are the changes from [Base Image Name]. This image is based on
-[Bluefin/Bazzite/Aurora/etc] and includes these customizations:
+This image is `ghcr.io/ublue-os/bluefin:stable` with its desktop replaced. It
+keeps everything Bluefin puts *around* the desktop — the `ujust` recipes, the
+Homebrew and Flatpak plumbing, `uupd`'s update policy, the codec and hardware
+enablement, Ptyxis, Bazaar — and swaps the session itself.
 
-### Added Packages (Build-time)
+The swap happens in one build phase,
+[`build/60-niri-noctalia.sh`](build/60-niri-noctalia.sh).
 
-- List the packages you install at build time
+### Added packages (build-time)
 
-### Added Applications (Runtime)
+The desktop, all from Fedora's own repositories:
 
-- **CLI tools (Homebrew)**: list them
-- **GUI apps (Flatpak)**: list them
+- **niri** — the scrolling-tiling Wayland compositor, with **xwayland-satellite**
+  for X11 clients
+- **noctalia** — the shell: bar, dock, launcher, notifications, control centre,
+  wallpaper, clipboard history, lock screen and settings UI, in one binary
+- **noctalia-greeter** and **greetd** — the login screen, from the same project
+  as the shell (see [The greeter](#the-greeter)). The greeter is the one package
+  not from Fedora: it comes from [Terra](https://terrapkg.com), added for that
+  one transaction and removed again
 
-### Removed or Disabled
+Applications and the utilities the session calls:
 
-- List anything removed from the base image
+- **ghostty** — the terminal, from the `scottames/ghostty` COPR, installed
+  isolated so the repository is not left enabled in the image
+- **nautilus** — the file manager, inherited from Bluefin and kept explicitly
+- **gnome-keyring**, **gnome-keyring-pam** — Secret Service, unlocked at login
+- **upower**, **ddcutil** — battery readings, and brightness on external
+  monitors over DDC/CI
+- **grim**, **slurp**, **wl-clipboard**, **brightnessctl**, **playerctl** —
+  capture, region selection, clipboard, backlight and MPRIS control
+- **sound-theme-freedesktop** — Noctalia's event sounds
 
-### Configuration Changes
+The build sets `install_weak_deps=0`, so nothing arrives by `Recommends`:
+every one of these is named on purpose.
 
-- Systemd services enabled or disabled
-- Desktop environment changes
-- Other notable modifications
+### Removed
 
-_Last updated: [date]_
+GNOME, and the greeter that cannot outlive it:
 
-> This section is what tells your users how your image differs from its base.
-> Update it whenever you add or remove a package, app, or service.
+- `gnome-shell`, `mutter`, `gnome-session`, `gnome-session-wayland-session`,
+  `gnome-classic-session`, `gnome-control-center`, `gnome-initial-setup`
+- `gdm` — it hard-requires `gnome-shell` and `gnome-session`
+  (`rpm -q --requires gdm`), so it goes whether or not you want it to
+- their dependents, which `dnf5` takes along: `gnome-browser-connector`,
+  `gnome-rounded-blur`, the bundled Shell extensions, and
+  `nautilus-gsconnect` / `nautilus-python`
 
-## Quick start
+Nautilus, Ptyxis, `gnome-keyring` and both `xdg-desktop-portal` backends are
+outside that closure and stay.
 
-1. **Create your repository** — "Use this template" on GitHub.
-2. **Rename the project.** The published name is your repository name. Three
-   files carry it as a literal, and `just test-contract` fails if they disagree:
+### Configuration changes
 
-   - `Containerfile` — the `# Name:` comment and `ARG IMAGE_NAME`
-   - `Justfile` — the `IMAGE_NAME` default
-   - `artifacthub-repo.yml` — `repositoryID`
+- `/etc/niri/config.kdl` — the image's niri configuration, shipped through
+  [`custom/files/`](custom/files/etc/niri/config.kdl) and validated by
+  `niri validate` during the build, so a broken config fails CI rather than
+  your first login
+- `/etc/greetd/config.toml` — greetd runs `noctalia-greeter-session` as
+  greetd's own service account
+- `/etc/pam.d/greetd` — a required `pam_systemd.so` session line, so the
+  greeter gets the logind session it needs to reach the seat
+- `noctalia-greeter-setup.service` — creates `/var/lib/noctalia-greeter` on
+  first boot, because `90-cleanup.sh` prunes `/var` out of the image
+- `display-manager.service` now points at `greetd`
+- `os-release` carries `VARIANT="Niri"` / `VARIANT_ID=niri`
 
-   Grep for `finpilot` afterwards to catch the prose and the examples.
-3. **Finish setup.** [The `onboarding` skill](.agents/skills/onboarding/SKILL.md)
-   carries the rest — enabling Actions, auto-merge and workflow permissions, the
-   Renovate token, the `stable` branch, branch protection on both branches, and
-   the labels. Every step has a `gh` command and a GitHub-website route, and the
-   skill ends by auditing that each setting matches.
+No portal configuration is shipped: niri's own
+`/usr/share/xdg-desktop-portal/niri-portals.conf` already prefers the GNOME
+backend for screencasting — niri speaks Mutter's ScreenCast D-Bus API, which is
+why that backend still works with Mutter gone — the GTK backend for file
+chooser and notifications, and `gnome-keyring` for secrets. The build only
+asserts those three are still installed.
+
+## The desktop
+
+Noctalia supplies the bar, launcher, notifications, lock screen, wallpaper and
+settings; niri supplies the window management. The binds below are the ones
+that differ from stock niri. `Mod` is <kbd>Super</kbd>.
+
+| Bind | Does |
+|---|---|
+| <kbd>Mod</kbd>+<kbd>T</kbd> | Ghostty |
+| <kbd>Mod</kbd>+<kbd>E</kbd> | Files |
+| <kbd>Mod</kbd>+<kbd>D</kbd> / <kbd>Mod</kbd>+<kbd>Space</kbd> | Noctalia launcher |
+| <kbd>Mod</kbd>+<kbd>S</kbd> | Noctalia control centre |
+| <kbd>Mod</kbd>+<kbd>N</kbd> | Notification history |
+| <kbd>Mod</kbd>+<kbd>,</kbd> | Noctalia settings |
+| <kbd>Mod</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd> | Lock the screen |
+| <kbd>Mod</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> | Clipboard history |
+| <kbd>Mod</kbd>+<kbd>Shift</kbd>+<kbd>Print</kbd> | Noctalia screenshot, with annotation |
+| <kbd>Mod</kbd>+<kbd>Shift</kbd>+<kbd>/</kbd> | niri's hotkey overlay — everything else |
+
+Volume, microphone, media and brightness keys route through Noctalia so its
+on-screen display shows the change. Everything not listed is stock niri; press
+<kbd>Mod</kbd>+<kbd>Shift</kbd>+<kbd>/</kbd> for the full list.
+
+To change any of it:
+
+```bash
+ujust niri-edit-config
+```
+
+That copies `/etc/niri/config.kdl` into `~/.config/niri/config.kdl`, opens your
+`$EDITOR`, and validates the result. niri reloads a valid config as soon as it
+is written and keeps the last good one when it is not. Edit the copy, never
+`/etc`: `/etc` is three-way merged on every image update.
+
+### The greeter
+
+Bluefin boots gdm. gdm hard-requires `gnome-shell` and `gnome-session`, so
+removing GNOME removes it too, and niri has no bundled greeter of its own.
+
+This image uses **[Noctalia Greeter](https://github.com/noctalia-dev/noctalia-greeter)** —
+the login screen built by the same project as the shell, so the greeter and the
+session share a visual language rather than merely coexisting.
+
+It is a **greetd** greeter, so greetd is the display manager: greetd runs
+`noctalia-greeter-session`, which starts the greeter's own bundled wlroots
+compositor and draws the greeter inside it. Nothing here needs an X server, and
+no separate kiosk compositor is installed either. It reads
+`/usr/share/wayland-sessions`, so niri appears in its session picker with no
+extra wiring.
+
+#### Theming it
+
+The greeter reads `/var/lib/noctalia-greeter/greeter.toml`, whose own header
+documents every key it takes — `[appearance]` (colour scheme, password style,
+corner radius, font), `[appearance.palette]` for the full colour-role table,
+`[appearance.wallpaper]`, plus `[output]`, `[keyboard]`, `[idle]` and `[cursor]`.
+
+The easier path is to let the shell drive it:
+
+```bash
+noctalia msg greeter-sync
+```
+
+That pushes the session's current wallpaper and colour palette to the greeter,
+so the login screen matches whatever theme you are running. It goes through the
+Polkit action the greeter package installs, so it prompts once rather than
+needing a root shell.
+
+`noctalia-greeter-setup.service` creates that state directory and its default
+`greeter.toml` the first time the machine boots. It has to happen there rather
+than at build time: `build/90-cleanup.sh` prunes `/var`, so nothing written
+under it during the build survives into the shipped image.
+
+#### On the Terra dependency
+
+`noctalia-greeter` is the only package in this image that does not come from
+Fedora — it is not packaged there, and upstream's installation guide points
+Fedora users at [Terra](https://terrapkg.com). The build adds Terra for that one
+transaction and removes the repository file again, with two restrictions worth
+knowing about:
+
+- `includepkgs=noctalia-greeter`. Terra also carries `noctalia`,
+  `noctalia-nightly`, `noctalia-qs` and `noctalia-legacy`, and its `noctalia` is
+  older than the 5.1.0 this image takes from Fedora. Without the restriction,
+  Terra would be free to downgrade the shell.
+- The signing key is pinned by fingerprint. Terra publishes no `.repo` file to
+  inherit, and signs each Fedora release with a **different** key — so the pin
+  is per Fedora major, and a Fedora rebase fails the build until someone
+  verifies the new key and adds it to `TERRA_KEY_FINGERPRINTS` in
+  `build/60-niri-noctalia.sh`. A rotated trust root should be a decision, not a
+  silent fetch.
 
 ## What's included
 
@@ -70,14 +194,19 @@ _Last updated: [date]_
 
 ## Customize
 
-Pick your base image on the `Containerfile`'s `FROM` line; the template defaults
-to Fedora Silverblue. That line is the only place the base is chosen: `just build`
-reads the image name and the tag from it, and the Fedora major comes from the
-base image itself during the build.
+Pick your base image on the `Containerfile`'s `FROM` line; this image uses
+`ghcr.io/ublue-os/bluefin:stable`. That line is the only place the base is
+chosen: `just build` reads the image name and the tag from it, and the Fedora
+major comes from the base image itself during the build. Moving off a
+GNOME-based base means `build/60-niri-noctalia.sh`'s removal list no longer
+matches — its verification block will say so rather than shipping a broken
+image.
 
 Then add to your image:
 
 - **System packages** — `build/20-packages-and-services.sh` ([guide](build/README.md))
+- **The desktop** — `build/60-niri-noctalia.sh` and
+  `custom/files/etc/niri/config.kdl`
 - **CLI tools** — `custom/brew/` ([guide](custom/brew/README.md))
 - **GUI apps** — `custom/flatpaks/` ([guide](custom/flatpaks/README.md))
 - **Commands** — `custom/ujust/` ([guide](custom/ujust/README.md))
@@ -108,9 +237,9 @@ key to generate or store.
 
 ```bash
 cosign verify \
-  --certificate-identity-regexp="https://github.com/your-username/your-repo-name/.github/workflows/" \
+  --certificate-identity-regexp="https://github.com/vincent-pochet/noctiri/.github/workflows/" \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
-  ghcr.io/your-username/your-repo-name:stable
+  ghcr.io/vincent-pochet/noctiri:stable
 ```
 
 Unsigned images fail the promotion gate, so `main → stable` reports
@@ -149,7 +278,7 @@ sides together, so changing one without the other fails the suite.
 Switch to a built image:
 
 ```bash
-sudo bootc switch --transport registry ghcr.io/your-username/your-repo-name:stable-testing
+sudo bootc switch --transport registry ghcr.io/vincent-pochet/noctiri:stable-testing
 sudo systemctl reboot
 ```
 
@@ -160,6 +289,7 @@ ujust install-default-apps    # Homebrew: the default Brewfile
 ujust install-dev-tools       # Homebrew: the development Brewfile
 ujust configure-dev-groups    # add yourself to docker and libvirt
 ujust install-config          # re-apply the image defaults, backing up yours
+ujust niri-edit-config        # copy the niri config into your home and edit it
 ```
 
 First boot unpacks Homebrew and installs the declared Flatpaks; both need a
@@ -187,6 +317,16 @@ surprises:
   Wi-Fi is configured installs nothing. Reboot once you are online.
 - **No `brew`.** `brew-setup.service` unpacks Homebrew on first boot; check its
   status before reaching for a reinstall.
+- **A login screen that is not gdm.** That is Noctalia Greeter: see
+  [The greeter](#the-greeter). Log in and niri starts; if it does not,
+  `journalctl -b -u greetd` and `journalctl --user -u niri` have the reason.
+- **A greeter that does not match your desktop theme.** Run
+  `noctalia msg greeter-sync` from the session. If the state directory is
+  missing entirely, `systemctl status noctalia-greeter-setup.service` says
+  why it did not run.
+- **A bar-less, wallpaper-less niri.** Noctalia is started by niri through
+  `spawn-at-startup` in `/etc/niri/config.kdl`. A `~/.config/niri/config.kdl`
+  copied from an older image, or from upstream niri, will not have that line.
 
 ## Community
 

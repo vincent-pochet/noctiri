@@ -25,6 +25,7 @@
 #    - @ublue-os/brew - Homebrew integration
 #
 # 2. Base Image Options (edit the FROM line below):
+#    - `ghcr.io/ublue-os/bluefin` (Bluefin, GNOME desktop) -- what this image uses
 #    - `quay.io/fedora-ostree-desktops/silverblue` (Fedora, GNOME desktop)
 #    - `quay.io/fedora-ostree-desktops/base-main` (Fedora, no desktop)
 #    - `quay.io/centos-bootc/centos-bootc:stream10` (CentOS-based)
@@ -48,9 +49,23 @@ COPY custom /custom
 COPY --from=common /system_files /oci/common
 COPY --from=brew /system_files /oci/brew
 
-# Base Image - GNOME included (Fedora official OSTree desktop)
+# Base Image - Bluefin itself, not the Fedora Silverblue the template shipped.
+#
+# Bluefin is the product this image wants to inherit: its ujust recipes, its
+# fastfetch and Bazaar configuration, ptyxis, and the hardware and codec
+# enablement it layers on Silverblue. It arrives with GNOME, which
+# build/60-niri-noctalia.sh then removes in favour of niri and Noctalia.
+#
+# Consequences of basing here rather than on Silverblue, both deliberate:
+#   - 10-overlay.sh re-applies projectbluefin/common's shared layer over a base
+#     that already carries it. The rsync is idempotent and the template's own
+#     declarations still win, which is the point of the phase ordering.
+#   - common/bluefin/ stays un-overlaid, as it always was. The base image
+#     already applied it, and most of it is GNOME dconf that no longer has a
+#     GNOME to configure.
+#
 # Renovate will keep the digest pin up to date.
-FROM quay.io/fedora-ostree-desktops/silverblue:44@sha256:cf819dd3c90524fa18965835d85df24c160785e24f93032429496e4a81e98592
+FROM ghcr.io/ublue-os/bluefin:stable@sha256:76aa5d6f4f2f3e18b244587bfbd45ae1777a7d0934f869534228eab6af1f0101
 
 # Image identity - these define how bootc, fastfetch, and the ublue ecosystem
 # recognize your image. Change these to match your project name.
@@ -69,8 +84,9 @@ ARG VERSION=""
 ##   - Files from @projectbluefin/common at /oci/common (includes branding/artwork content)
 ##   - Files from @ublue-os/brew at /oci/brew
 ## Scripts run in the order of the RUN blocks below: image identity, runtime
-## overlays, default packages and services, then cleanup. An activated example
-## gets its own block between the package phase and the cleanup phase.
+## overlays, default packages and services, the desktop swap, then cleanup. An
+## activated example gets its own block between the package phase and the
+## cleanup phase.
 
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/boot \
@@ -105,6 +121,19 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/build/20-packages-and-services.sh
 
+### DESKTOP
+## Replaces the GNOME desktop inherited from the Bluefin base with the niri
+## compositor and the Noctalia shell, and swaps gdm -- which cannot outlive
+## gnome-shell -- for greetd. It runs after the package phase so the desktop
+## removal sees a settled package set, and before cleanup so its verification
+## steps run against the image as it will ship.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache/libdnf5 \
+    --mount=type=cache,dst=/var/cache/rpm-ostree \
+    --mount=type=tmpfs,dst=/boot \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/build/60-niri-noctalia.sh
+
 ### CLEANUP
 ## Finalises package and Flatpak sources, then prunes build artifacts before
 ## linting. /run is deliberately not mounted as tmpfs here: the script must
@@ -128,10 +157,10 @@ RUN rm -rf /opt && ln -s /var/opt /opt
 ## builds and CI supply the dynamic values through `just build`; keeping these
 ## ARGs late prevents a new version or timestamp from invalidating package and
 ## overlay layers above.
-ARG IMAGE_DESC="My Customized Universal Blue Image"
+ARG IMAGE_DESC="Bluefin with the niri compositor and the Noctalia shell"
 ARG IMAGE_CREATED=""
 ARG IMAGE_LOGO_URL="https://avatars.githubusercontent.com/u/120078124?s=200&v=4"
-ARG IMAGE_KEYWORDS="bootc,ublue,universal-blue"
+ARG IMAGE_KEYWORDS="bootc,ublue,universal-blue,bluefin,niri,noctalia,wayland"
 ARG IMAGE_REF="main"
 ## The commit the image was built from. It is declared here, with the other
 ## volatile metadata, so a new commit only invalidates the label layer.
