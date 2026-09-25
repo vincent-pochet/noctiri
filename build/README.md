@@ -12,6 +12,8 @@ prefix auto-discovery. The numbers communicate intent.
 | `10-overlay.sh` | Overlays `projectbluefin/common`'s shared layer and the Brew integration, copies this template's declarations (Brewfiles, ujust recipes, Flatpak preinstalls, `/etc/skel` seeds), and enables the units that consume them. Installs no packages. |
 | `20-packages-and-services.sh` | Installs the default RPM and COPR packages and enables their services. Packages live here, not in the overlay phase, so an overlay edit cannot invalidate the package layer. |
 | `60-niri-noctalia.sh` | Replaces the GNOME desktop inherited from Bluefin with niri and the Noctalia shell, swaps gdm for greetd with Noctalia Greeter, and verifies the result before the build can succeed. |
+| `70-remove-virtualization.sh` | Removes the host virtualization stack the `-dx` base carries — libvirt, QEMU, `virt-manager`, libguestfs, SPICE and their firmware — keeping the guest-side integration and the container tools, and verifies both halves of that. |
+| `75-remove-base-apps.sh` | Removes the base applications this image replaces: Ptyxis for Ghostty, Visual Studio Code for Zed, the Cockpit web console, and the LXC and Incus container managers behind Podman and Docker. |
 | `90-cleanup.sh` | Finalises package and Flatpak sources, prunes build artifacts, and prepares for `bootc container lint`. |
 
 Helpers, not phases: `copr-helpers.sh` (sourced), `validate-brewfiles.sh`, and

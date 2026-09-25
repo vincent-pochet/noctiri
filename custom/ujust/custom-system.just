@@ -8,18 +8,19 @@
 ## user configuration or change group membership. These recipes are the
 ## explicit, user-invoked way to do both.
 
-# Add the current user to the docker and libvirt groups, creating them if needed.
+# Add the current user to the docker group, creating it if needed.
 [group('System')]
 configure-dev-groups:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    # Fedora ships no /usr/lib/group entry to copy for either name, and both
-    # daemons are opt-in for a fork, so create a group when it is missing rather
-    # than assume a package provided it. Only the mutating commands escalate;
-    # the checks run as the invoking user.
+    # Fedora ships no /usr/lib/group entry to copy for the name, and the daemon
+    # is opt-in for a fork, so create the group when it is missing rather than
+    # assume a package provided it. The list is an array because a fork that
+    # adds another daemon adds a name here and nothing else. Only the mutating
+    # commands escalate; the checks run as the invoking user.
     CURRENT_USER="$(id -un)"
-    DEV_GROUPS=(docker libvirt)
+    DEV_GROUPS=(docker)
     MISSING=()
 
     for group in "${DEV_GROUPS[@]}"; do
@@ -47,7 +48,7 @@ configure-dev-groups:
     GROUP_LIST="$(IFS=,; echo "${MISSING[*]}")"
     sudo usermod --append --groups "${GROUP_LIST}" "${CURRENT_USER}"
     echo "Added ${CURRENT_USER} to: ${MISSING[*]}"
-    echo "Log out and back in before using docker or libvirt without sudo."
+    echo "Log out and back in before using docker without sudo."
 
 # Restore the image's default user configuration into this user's home.
 [group('System')]
