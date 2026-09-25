@@ -52,11 +52,10 @@ COPY --from=brew /system_files /oci/brew
 
 # Base Image - Bluefin's developer-experience variant.
 #
-# Inherits Bluefin's product layer (ujust recipes, Ptyxis, Bazaar, codec and
-# hardware enablement) plus the -dx developer stack. GNOME comes with it, and
-# build/60-niri-noctalia.sh removes it in favour of niri and Noctalia; nothing
-# -dx adds depends on GNOME, so dropping to plain `ghcr.io/ublue-os/bluefin`
-# is a one-line change.
+# Inherits Bluefin's product layer (ujust recipes, Bazaar, codec and hardware
+# enablement) plus the -dx developer stack. The desktop phase replaces the
+# session it ships with niri and Noctalia, and the two removal phases take out
+# the parts of -dx this image does not use.
 #
 # Basing here rather than on Silverblue means 10-overlay.sh re-applies
 # projectbluefin/common over a base that already has it. The rsync is
@@ -83,9 +82,9 @@ ARG VERSION=""
 ##   - Files from @projectbluefin/common at /oci/common (includes branding/artwork content)
 ##   - Files from @ublue-os/brew at /oci/brew
 ## Scripts run in the order of the RUN blocks below: image identity, runtime
-## overlays, default packages and services, the desktop swap, then cleanup. An
-## activated example gets its own block between the package phase and the
-## cleanup phase.
+## overlays, default packages and services, the desktop swap, the two
+## removal phases, then cleanup. An activated example gets its own
+## block between the package phase and the cleanup phase.
 
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/boot \
@@ -131,6 +130,30 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/boot \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/build/60-niri-noctalia.sh
+
+### VIRTUALIZATION
+## Removes the host virtualization stack the -dx base carries -- libvirt, QEMU,
+## virt-manager, libguestfs, SPICE and their firmware -- keeping the guest-side
+## integration and the container tools. After the package and desktop phases so
+## it resolves against a settled package set, before cleanup so its
+## verification runs against the image as it will ship.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache/libdnf5 \
+    --mount=type=cache,dst=/var/cache/rpm-ostree \
+    --mount=type=tmpfs,dst=/boot \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/build/70-remove-virtualization.sh
+
+### BASE APPLICATIONS
+## Removes the base applications this image replaces -- Ptyxis for Ghostty,
+## Visual Studio Code for Zed, the Cockpit web console, and the LXC/Incus
+## container managers behind Podman and Docker.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache/libdnf5 \
+    --mount=type=cache,dst=/var/cache/rpm-ostree \
+    --mount=type=tmpfs,dst=/boot \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/build/75-remove-base-apps.sh
 
 ### CLEANUP
 ## Finalises package and Flatpak sources, then prunes build artifacts before

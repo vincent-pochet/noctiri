@@ -26,6 +26,11 @@ Branch=stable
 [Flatpak Preinstall com.mattjakeman.ExtensionManager]
 Branch=stable
 
+# The editor. Zed is not in Fedora's repositories, and Flathub carries the
+# build its own project publishes.
+[Flatpak Preinstall dev.zed.Zed]
+Branch=stable
+
 # Add another by appending a section, for example:
 #
 # [Flatpak Preinstall io.github.flattool.Warehouse]

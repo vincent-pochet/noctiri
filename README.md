@@ -3,47 +3,44 @@
 A bootc operating system based on
 [Bluefin DX](https://docs.projectbluefin.io/bluefin-dx/), running the
 [niri](https://github.com/niri-wm/niri) scrolling Wayland compositor and the
-[Noctalia](https://github.com/noctalia-dev/noctalia) shell in place of Bluefin's
-GNOME desktop.
+[Noctalia](https://github.com/noctalia-dev/noctalia) shell.
 
 ## What makes this different from Bluefin DX
 
-This image is `ghcr.io/ublue-os/bluefin-dx:stable` with its desktop replaced. It
+This image is `ghcr.io/ublue-os/bluefin-dx:stable` with its own session. It
 keeps everything Bluefin puts *around* the desktop — the `ujust` recipes, the
 Homebrew and Flatpak plumbing, `uupd`'s update policy, the codec and hardware
-enablement, Ptyxis, Bazaar — and swaps the session itself.
+enablement, Bazaar — and runs niri and Noctalia on top of it.
 
 ### The developer tooling
 
-`-dx` is Bluefin's developer-experience variant, and this image inherits all of
-it untouched: Docker CE and the Compose/Buildx plugins, the Podman extras
-(`podman-compose`, `podman-tui`, `podman-machine`), the full libvirt/QEMU stack
-with `virt-manager` and `virt-install`, Incus and LXC, VS Code, Cockpit, the
-tracing and debugging tools (`bpftrace`, `bcc`, `systemtap`, `sysprof`,
-`gdb`, `strace`), LLVM/Clang, ROCm, `kernel-devel`, `flatpak-builder`,
-`osbuild`, `git-lfs` and the devcontainer plumbing — around 420 packages that
-plain `bluefin` does not carry.
+`-dx` is Bluefin's developer-experience variant, and this image carries its
+container and toolchain half: Docker CE with the Compose and Buildx plugins,
+the Podman extras (`podman-compose`, `podman-tui`), the tracing and debugging
+tools (`bpftrace`, `bcc`, `sysprof`, `gdb`, `strace`), LLVM/Clang, ROCm,
+`kernel-devel`, `flatpak-builder`, `git-lfs` and the devcontainer plumbing.
 
-Before using Docker or libvirt without `sudo`:
+Before using Docker without `sudo`:
 
 ```bash
 ujust configure-dev-groups
 ```
 
-None of it depends on GNOME: the removal below takes exactly the same 19
-packages out of `bluefin-dx` as it does out of `bluefin`, so the desktop swap
-and the developer stack are independent. If you want the smaller image, change
-the `FROM` line to `ghcr.io/ublue-os/bluefin` — nothing else needs to move.
-
-The swap happens in one build phase,
+Podman and Docker are the whole of it, and the editor is Zed. Two build phases
+say so explicitly, which is worth reading before wondering where something
+went:
+[`build/70-remove-virtualization.sh`](build/70-remove-virtualization.sh) takes
+out the host virtualization stack, and
+[`build/75-remove-base-apps.sh`](build/75-remove-base-apps.sh) the applications
+this image replaces. The session itself is assembled in
 [`build/60-niri-noctalia.sh`](build/60-niri-noctalia.sh).
 
 ### Added packages (build-time)
 
 The desktop, all from Fedora's own repositories:
 
-- **niri** — the scrolling-tiling Wayland compositor, with **xwayland-satellite**
-  for X11 clients
+- **niri** — the scrolling-tiling Wayland compositor, with
+  **xwayland-satellite**
 - **noctalia** — the shell: bar, dock, launcher, notifications, control centre,
   wallpaper, clipboard history, lock screen and settings UI, in one binary
 - **noctalia-greeter** and **greetd** — the login screen, from the same project
@@ -66,20 +63,15 @@ Applications and the utilities the session calls:
 The build sets `install_weak_deps=0`, so nothing arrives by `Recommends`:
 every one of these is named on purpose.
 
-### Removed
+### Applications (first boot)
 
-GNOME, and the greeter that cannot outlive it:
+Declared in [`custom/flatpaks/`](custom/flatpaks/default.preinstall) and
+installed by `flatpak preinstall` the first time the system boots with a
+network connection:
 
-- `gnome-shell`, `mutter`, `gnome-session`, `gnome-session-wayland-session`,
-  `gnome-classic-session`, `gnome-control-center`, `gnome-initial-setup`
-- `gdm` — it hard-requires `gnome-shell` and `gnome-session`
-  (`rpm -q --requires gdm`), so it goes whether or not you want it to
-- their dependents, which `dnf5` takes along: `gnome-browser-connector`,
-  `gnome-rounded-blur`, the bundled Shell extensions, and
-  `nautilus-gsconnect` / `nautilus-python`
-
-Nautilus, Ptyxis, `gnome-keyring` and both `xdg-desktop-portal` backends are
-outside that closure and stay.
+- **Zed** (`dev.zed.Zed`) — the editor, from the build its own project
+  publishes on Flathub
+- **Thunderbird**, **Flatseal**, **Extension Manager**
 
 ### Configuration changes
 
@@ -97,11 +89,11 @@ outside that closure and stay.
 - `os-release` carries `VARIANT="Niri"` / `VARIANT_ID=niri`
 
 No portal configuration is shipped: niri's own
-`/usr/share/xdg-desktop-portal/niri-portals.conf` already prefers the GNOME
-backend for screencasting — niri speaks Mutter's ScreenCast D-Bus API, which is
-why that backend still works with Mutter gone — the GTK backend for file
-chooser and notifications, and `gnome-keyring` for secrets. The build only
-asserts those three are still installed.
+`/usr/share/xdg-desktop-portal/niri-portals.conf` already names the backends it
+wants — `xdg-desktop-portal-gnome` for screencasting, since niri speaks the
+same ScreenCast D-Bus API, `xdg-desktop-portal-gtk` for the file chooser and
+notifications, and `gnome-keyring` for secrets. The build asserts those three
+are installed.
 
 ## The desktop
 
@@ -139,17 +131,15 @@ is written and keeps the last good one when it is not. Edit the copy, never
 
 ### The greeter
 
-Bluefin boots gdm. gdm hard-requires `gnome-shell` and `gnome-session`, so
-removing GNOME removes it too, and niri has no bundled greeter of its own.
+niri has no bundled greeter of its own, so the image picks one.
 
-This image uses **[Noctalia Greeter](https://github.com/noctalia-dev/noctalia-greeter)** —
+It uses **[Noctalia Greeter](https://github.com/noctalia-dev/noctalia-greeter)** —
 the login screen built by the same project as the shell, so the greeter and the
 session share a visual language rather than merely coexisting.
 
 It is a **greetd** greeter, so greetd is the display manager: greetd runs
 `noctalia-greeter-session`, which starts the greeter's own bundled wlroots
-compositor and draws the greeter inside it. Nothing here needs an X server, and
-no separate kiosk compositor is installed either. It reads
+compositor and draws the greeter inside it. It reads
 `/usr/share/wayland-sessions`, so niri appears in its session picker with no
 extra wiring.
 
@@ -220,10 +210,10 @@ knowing about:
 Pick your base image on the `Containerfile`'s `FROM` line; this image uses
 `ghcr.io/ublue-os/bluefin-dx:stable`. That line is the only place the base is
 chosen: `just build` reads the image name and the tag from it, and the Fedora
-major comes from the base image itself during the build. Moving off a
-GNOME-based base means `build/60-niri-noctalia.sh`'s removal list no longer
-matches — its verification block will say so rather than shipping a broken
-image.
+major comes from the base image itself during the build. Move to another base
+and the desktop phase and the two removal phases are where it shows: each
+verifies what it did, so a mismatch fails the build rather than shipping a
+broken image.
 
 Then add to your image:
 
@@ -310,7 +300,7 @@ Then, as your user:
 ```bash
 ujust install-default-apps    # Homebrew: the default Brewfile
 ujust install-dev-tools       # Homebrew: the development Brewfile
-ujust configure-dev-groups    # add yourself to docker and libvirt
+ujust configure-dev-groups    # add yourself to the docker group
 ujust install-config          # re-apply the image defaults, backing up yours
 ujust niri-edit-config        # copy the niri config into your home and edit it
 ```
@@ -340,7 +330,7 @@ surprises:
   Wi-Fi is configured installs nothing. Reboot once you are online.
 - **No `brew`.** `brew-setup.service` unpacks Homebrew on first boot; check its
   status before reaching for a reinstall.
-- **A login screen that is not gdm.** That is Noctalia Greeter: see
+- **An unfamiliar login screen.** That is Noctalia Greeter: see
   [The greeter](#the-greeter). Log in and niri starts; if it does not,
   `journalctl -b -u greetd` and `journalctl --user -u niri` have the reason.
 - **A greeter that does not match your desktop theme.** Run
