@@ -26,16 +26,8 @@ Before using Docker without `sudo`:
 ujust configure-dev-groups
 ```
 
-Podman and Docker are the whole of it, and the editor is Zed. Cross-architecture
-container builds work as they do on stock Bluefin — `qemu-user-static-aarch64`
-stays, and its `binfmt_misc` registration uses the `F` flag, so
-
-```bash
-podman build --platform=linux/arm64 .
-```
-
-needs nothing mounted into the container. Two build phases say what left, which
-is worth reading before wondering where something went:
+Podman and Docker are the whole of it, and the editor is Zed. Two build phases
+say what left, which is worth reading before wondering where something went:
 [`build/70-remove-virtualization.sh`](build/70-remove-virtualization.sh) takes
 out the host virtualization stack, and
 [`build/75-remove-base-apps.sh`](build/75-remove-base-apps.sh) the applications
