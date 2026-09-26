@@ -93,38 +93,36 @@ _run_recipe() {
         /usr/bin/bash "${WORKDIR}/${recipe}.sh"
 }
 
-@test "configure-dev-groups creates missing groups and adds the user" {
+@test "configure-dev-groups creates a missing group and adds the user" {
     _run_recipe "configure-dev-groups" MOCK_GETENT_STATUS=1 MOCK_GROUPS="tester wheel"
 
     [ "${status}" -eq 0 ]
     grep -qF "sudo groupadd --system docker" "${COMMAND_LOG}"
-    grep -qF "sudo groupadd --system libvirt" "${COMMAND_LOG}"
-    grep -qF "sudo usermod --append --groups docker,libvirt tester" "${COMMAND_LOG}"
+    grep -qF "sudo usermod --append --groups docker tester" "${COMMAND_LOG}"
 }
 
-@test "configure-dev-groups does not recreate groups that already exist" {
+@test "configure-dev-groups does not recreate a group that already exists" {
     _run_recipe "configure-dev-groups" MOCK_GETENT_STATUS=0 MOCK_GROUPS="tester wheel"
 
     [ "${status}" -eq 0 ]
     [ "$(grep -cF "groupadd" "${COMMAND_LOG}")" -eq 0 ]
-    grep -qF "sudo usermod --append --groups docker,libvirt tester" "${COMMAND_LOG}"
+    grep -qF "sudo usermod --append --groups docker tester" "${COMMAND_LOG}"
 }
 
-@test "configure-dev-groups adds only the groups the user is missing" {
-    _run_recipe "configure-dev-groups" MOCK_GETENT_STATUS=0 MOCK_GROUPS="tester docker"
+@test "configure-dev-groups prompts with the group it is about to add" {
+    _run_recipe "configure-dev-groups" MOCK_GETENT_STATUS=0 MOCK_GROUPS="tester wheel"
 
     [ "${status}" -eq 0 ]
-    grep -qF "Add tester to: libvirt?" "${COMMAND_LOG}"
-    grep -qF "sudo usermod --append --groups libvirt tester" "${COMMAND_LOG}"
+    grep -qF "Add tester to: docker?" "${COMMAND_LOG}"
 }
 
 @test "configure-dev-groups changes nothing when access is already complete" {
-    _run_recipe "configure-dev-groups" MOCK_GETENT_STATUS=0 MOCK_GROUPS="tester docker libvirt"
+    _run_recipe "configure-dev-groups" MOCK_GETENT_STATUS=0 MOCK_GROUPS="tester docker"
 
     [ "${status}" -eq 0 ]
     [ "$(grep -cF "usermod" "${COMMAND_LOG}")" -eq 0 ]
     [ "$(grep -cF "gum confirm" "${COMMAND_LOG}")" -eq 0 ]
-    [[ "${output}" == *"tester is already in: docker libvirt"* ]]
+    [[ "${output}" == *"tester is already in: docker"* ]]
 }
 
 @test "configure-dev-groups cancels without changing anything" {

@@ -1,0 +1,317 @@
+// Noctiri's default niri configuration.
+//
+// niri reads ~/.config/niri/config.kdl first and this file only as a fallback.
+// To change anything, run `ujust niri-edit-config` rather than editing here:
+// /etc is three-way merged on every image update.
+//
+// Derived from niri's default-config.kdl and rewired for Noctalia, which
+// supplies the bar, launcher, notifications, lock screen and settings UI.
+// The build runs `niri validate` against this file, so a syntax error fails
+// the image rather than the first login.
+//
+// KDL format (https://kdl.dev); "/-" comments out the node that follows.
+// Reference: https://niri-wm.github.io/niri/Configuration:-Introduction
+
+input {
+    keyboard {
+        xkb {
+            // Empty on purpose: niri then takes the layout from locale1,
+            // which is what `localectl set-x11-keymap` changes.
+        }
+
+        numlock
+    }
+
+    touchpad {
+        tap
+        natural-scroll
+    }
+
+    mouse {
+        // accel-profile "flat"
+    }
+
+    // Focus windows by hovering them. Off by default, as upstream has it.
+    // focus-follows-mouse max-scroll-amount="0%"
+}
+
+// Outputs are named by connector; `niri msg outputs` lists them. Noctalia's
+// settings panel configures monitors too, which is usually easier than this.
+/-output "eDP-1" {
+    mode "1920x1080@60.000"
+    scale 1.0
+    transform "normal"
+    position x=0 y=0
+}
+
+layout {
+    gaps 16
+
+    // Column placement when the strip is wider than the screen.
+    center-focused-column "never"
+
+    preset-column-widths {
+        proportion 0.33333
+        proportion 0.5
+        proportion 0.66667
+    }
+
+    default-column-width { proportion 0.5; }
+
+    focus-ring {
+        width 4
+        active-color "#7aa2f7"
+        inactive-color "#505050"
+    }
+
+    border {
+        off
+        width 4
+        active-color "#ffc87f"
+        inactive-color "#505050"
+        urgent-color "#9b0000"
+    }
+
+    shadow {
+        softness 30
+        spread 5
+        offset x=0 y=5
+        color "#0007"
+    }
+
+    struts {
+    }
+}
+
+// niri starts the shell, as upstream Noctalia recommends over an XDG
+// autostart entry: it comes up with the session and goes down with it.
+spawn-at-startup "noctalia"
+
+// Wayland-native rendering for Electron apps instead of the XWayland fallback.
+environment {
+    ELECTRON_OZONE_PLATFORM_HINT "auto"
+}
+
+hotkey-overlay {
+    // skip-at-startup
+}
+
+prefer-no-csd
+
+// niri's own screenshot UI writes here; Noctalia's panel has its own setting.
+screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
+
+animations {
+    // off
+}
+
+// Floating keeps Noctalia's windows out of the scrolling strip; the backdrop
+// rule puts its wallpaper behind the workspaces in the Overview.
+window-rule {
+    match app-id=r#"^dev\.noctalia\.Noctalia$"#
+    open-floating true
+}
+
+layer-rule {
+    match namespace="^noctalia-backdrop$"
+    place-within-backdrop true
+}
+
+// Noctalia's panels open from an IPC call, not a click, so they carry no
+// activation token niri would otherwise accept.
+debug {
+    honor-xdg-activation-with-invalid-serial
+}
+
+// Picture-in-picture, floating. Zen is the default browser and Firefox is
+// still installable, and both are Gecko, so one rule covers them. The regex
+// is anchored at the end to match host and Flatpak app-ids alike: "firefox",
+// "org.mozilla.firefox", "zen", "app.zen_browser.zen".
+window-rule {
+    match app-id=r#"(firefox|zen)$"# title="^Picture-in-Picture$"
+    open-floating true
+}
+
+binds {
+    // "Mod" is Super on a TTY and Alt when niri runs nested in a window.
+
+    Mod+Shift+Slash { show-hotkey-overlay; }
+
+    // Mod+D is niri's default launcher bind, Mod+Space is Noctalia's own.
+    Mod+T hotkey-overlay-title="Open a Terminal: Ghostty" { spawn "ghostty"; }
+    Mod+E hotkey-overlay-title="Open the File Manager: Files" { spawn "nautilus" "--new-window"; }
+    Mod+D hotkey-overlay-title="Run an Application: Noctalia" { spawn "noctalia" "msg" "panel-toggle" "launcher"; }
+    Mod+Space hotkey-overlay-title="Run an Application: Noctalia" { spawn "noctalia" "msg" "panel-toggle" "launcher"; }
+
+    // Noctalia's shell surfaces.
+    Mod+S hotkey-overlay-title="Control Centre: Noctalia" { spawn "noctalia" "msg" "panel-toggle" "control-center"; }
+    Mod+N hotkey-overlay-title="Notifications: Noctalia" { spawn "noctalia" "msg" "panel-toggle" "notification-history"; }
+    Mod+Comma hotkey-overlay-title="Settings: Noctalia" { spawn "noctalia" "msg" "settings-toggle"; }
+    Mod+Alt+L hotkey-overlay-title="Lock the Screen: Noctalia" { spawn "noctalia" "msg" "session" "lock"; }
+    Mod+Alt+V hotkey-overlay-title="Clipboard History: Noctalia" { spawn "noctalia" "msg" "panel-toggle" "launcher" "/clipboard"; }
+
+    // Screen reader toggle, as upstream ships it.
+    Super+Alt+S allow-when-locked=true hotkey-overlay-title=null { spawn-sh "pkill orca || exec orca"; }
+
+    // Through Noctalia so its OSD shows the change.
+    XF86AudioRaiseVolume allow-when-locked=true { spawn "noctalia" "msg" "volume-up"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn "noctalia" "msg" "volume-down"; }
+    XF86AudioMute        allow-when-locked=true { spawn "noctalia" "msg" "volume-mute"; }
+    XF86AudioMicMute     allow-when-locked=true { spawn "noctalia" "msg" "mic-mute"; }
+
+    XF86AudioPlay allow-when-locked=true { spawn "noctalia" "msg" "media" "play-pause"; }
+    XF86AudioStop allow-when-locked=true { spawn "noctalia" "msg" "media" "stop"; }
+    XF86AudioPrev allow-when-locked=true { spawn "noctalia" "msg" "media" "previous"; }
+    XF86AudioNext allow-when-locked=true { spawn "noctalia" "msg" "media" "next"; }
+
+    // Noctalia drives sysfs backlights and, via ddcutil, external monitors.
+    XF86MonBrightnessUp   allow-when-locked=true { spawn "noctalia" "msg" "brightness-up"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn "noctalia" "msg" "brightness-down"; }
+    XF86KbdBrightnessUp   allow-when-locked=true { spawn "noctalia" "msg" "keyboard-backlight-up"; }
+    XF86KbdBrightnessDown allow-when-locked=true { spawn "noctalia" "msg" "keyboard-backlight-down"; }
+
+    // Overview: a zoomed-out view of workspaces and windows.
+    Mod+O repeat=false { toggle-overview; }
+
+    Mod+Q repeat=false { close-window; }
+
+    Mod+Left  { focus-column-left; }
+    Mod+Down  { focus-window-down; }
+    Mod+Up    { focus-window-up; }
+    Mod+Right { focus-column-right; }
+    Mod+H     { focus-column-left; }
+    Mod+J     { focus-window-down; }
+    Mod+K     { focus-window-up; }
+    Mod+L     { focus-column-right; }
+
+    Mod+Ctrl+Left  { move-column-left; }
+    Mod+Ctrl+Down  { move-window-down; }
+    Mod+Ctrl+Up    { move-window-up; }
+    Mod+Ctrl+Right { move-column-right; }
+    Mod+Ctrl+H     { move-column-left; }
+    Mod+Ctrl+J     { move-window-down; }
+    Mod+Ctrl+K     { move-window-up; }
+    Mod+Ctrl+L     { move-column-right; }
+
+    Mod+Home { focus-column-first; }
+    Mod+End  { focus-column-last; }
+    Mod+Ctrl+Home { move-column-to-first; }
+    Mod+Ctrl+End  { move-column-to-last; }
+
+    Mod+Shift+Left  { focus-monitor-left; }
+    Mod+Shift+Down  { focus-monitor-down; }
+    Mod+Shift+Up    { focus-monitor-up; }
+    Mod+Shift+Right { focus-monitor-right; }
+    Mod+Shift+H     { focus-monitor-left; }
+    Mod+Shift+J     { focus-monitor-down; }
+    Mod+Shift+K     { focus-monitor-up; }
+    Mod+Shift+L     { focus-monitor-right; }
+
+    Mod+Shift+Ctrl+Left  { move-column-to-monitor-left; }
+    Mod+Shift+Ctrl+Down  { move-column-to-monitor-down; }
+    Mod+Shift+Ctrl+Up    { move-column-to-monitor-up; }
+    Mod+Shift+Ctrl+Right { move-column-to-monitor-right; }
+    Mod+Shift+Ctrl+H     { move-column-to-monitor-left; }
+    Mod+Shift+Ctrl+J     { move-column-to-monitor-down; }
+    Mod+Shift+Ctrl+K     { move-column-to-monitor-up; }
+    Mod+Shift+Ctrl+L     { move-column-to-monitor-right; }
+
+    Mod+Page_Down      { focus-workspace-down; }
+    Mod+Page_Up        { focus-workspace-up; }
+    Mod+U              { focus-workspace-down; }
+    Mod+I              { focus-workspace-up; }
+    Mod+Ctrl+Page_Down { move-column-to-workspace-down; }
+    Mod+Ctrl+Page_Up   { move-column-to-workspace-up; }
+    Mod+Ctrl+U         { move-column-to-workspace-down; }
+    Mod+Ctrl+I         { move-column-to-workspace-up; }
+
+    Mod+Shift+Page_Down { move-workspace-down; }
+    Mod+Shift+Page_Up   { move-workspace-up; }
+    Mod+Shift+U         { move-workspace-down; }
+    Mod+Shift+I         { move-workspace-up; }
+
+    Mod+WheelScrollDown      cooldown-ms=150 { focus-workspace-down; }
+    Mod+WheelScrollUp        cooldown-ms=150 { focus-workspace-up; }
+    Mod+Ctrl+WheelScrollDown cooldown-ms=150 { move-column-to-workspace-down; }
+    Mod+Ctrl+WheelScrollUp   cooldown-ms=150 { move-column-to-workspace-up; }
+
+    Mod+WheelScrollRight      { focus-column-right; }
+    Mod+WheelScrollLeft       { focus-column-left; }
+    Mod+Ctrl+WheelScrollRight { move-column-right; }
+    Mod+Ctrl+WheelScrollLeft  { move-column-left; }
+
+    Mod+Shift+WheelScrollDown      { focus-column-right; }
+    Mod+Shift+WheelScrollUp        { focus-column-left; }
+    Mod+Ctrl+Shift+WheelScrollDown { move-column-right; }
+    Mod+Ctrl+Shift+WheelScrollUp   { move-column-left; }
+
+    // niri has dynamic workspaces, so an index past the last one lands on the
+    // bottommost empty workspace rather than failing.
+    Mod+1 { focus-workspace 1; }
+    Mod+2 { focus-workspace 2; }
+    Mod+3 { focus-workspace 3; }
+    Mod+4 { focus-workspace 4; }
+    Mod+5 { focus-workspace 5; }
+    Mod+6 { focus-workspace 6; }
+    Mod+7 { focus-workspace 7; }
+    Mod+8 { focus-workspace 8; }
+    Mod+9 { focus-workspace 9; }
+    Mod+Ctrl+1 { move-column-to-workspace 1; }
+    Mod+Ctrl+2 { move-column-to-workspace 2; }
+    Mod+Ctrl+3 { move-column-to-workspace 3; }
+    Mod+Ctrl+4 { move-column-to-workspace 4; }
+    Mod+Ctrl+5 { move-column-to-workspace 5; }
+    Mod+Ctrl+6 { move-column-to-workspace 6; }
+    Mod+Ctrl+7 { move-column-to-workspace 7; }
+    Mod+Ctrl+8 { move-column-to-workspace 8; }
+    Mod+Ctrl+9 { move-column-to-workspace 9; }
+
+    Mod+Tab { focus-workspace-previous; }
+
+    Mod+BracketLeft  { consume-or-expel-window-left; }
+    Mod+BracketRight { consume-or-expel-window-right; }
+
+    // Upstream puts this on Mod+Comma, which Noctalia's settings now uses.
+    Mod+Shift+Comma { consume-window-into-column; }
+    Mod+Period      { expel-window-from-column; }
+
+    Mod+R { switch-preset-column-width; }
+    Mod+Shift+R { switch-preset-column-width-back; }
+    Mod+Ctrl+Shift+R { switch-preset-window-height; }
+    Mod+Ctrl+R { reset-window-height; }
+
+    Mod+F { maximize-column; }
+    Mod+Shift+F { fullscreen-window; }
+    Mod+M { maximize-window-to-edges; }
+    Mod+Ctrl+F { expand-column-to-available-width; }
+
+    Mod+C { center-column; }
+    Mod+Ctrl+C { center-visible-columns; }
+
+    Mod+Minus { set-column-width "-10%"; }
+    Mod+Equal { set-column-width "+10%"; }
+    Mod+Shift+Minus { set-window-height "-10%"; }
+    Mod+Shift+Equal { set-window-height "+10%"; }
+
+    Mod+V       { toggle-window-floating; }
+    Mod+Shift+V { switch-focus-between-floating-and-tiling; }
+
+    Mod+W { toggle-column-tabbed-display; }
+
+    // niri's built-in screenshot UI; Noctalia's panel, with annotation and a
+    // save-or-copy prompt, is on Mod+Shift+Print.
+    Print { screenshot; }
+    Ctrl+Print { screenshot-screen; }
+    Alt+Print { screenshot-window; }
+    Mod+Shift+Print { spawn "noctalia" "msg" "screenshot-region"; }
+
+    // Escape hatch for clients that inhibit shortcuts.
+    Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
+
+    // niri confirms before quitting. Suspend, reboot and power off are in
+    // Noctalia's control centre.
+    Mod+Shift+E { quit; }
+    Ctrl+Alt+Delete { quit; }
+
+    Mod+Shift+P { power-off-monitors; }
+}

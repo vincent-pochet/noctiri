@@ -11,6 +11,9 @@ prefix auto-discovery. The numbers communicate intent.
 | `00-image-info.sh` | Writes the image identity into `os-release` and `image-info.json`: the base image name, the Fedora major derived from the base's `os-release`, the version string, and the tag. |
 | `10-overlay.sh` | Overlays `projectbluefin/common`'s shared layer and the Brew integration, copies this template's declarations (Brewfiles, ujust recipes, Flatpak preinstalls, `/etc/skel` seeds), and enables the units that consume them. Installs no packages. |
 | `20-packages-and-services.sh` | Installs the default RPM and COPR packages and enables their services. Packages live here, not in the overlay phase, so an overlay edit cannot invalidate the package layer. |
+| `60-niri-noctalia.sh` | Replaces the GNOME desktop inherited from Bluefin with niri and the Noctalia shell, swaps gdm for greetd with Noctalia Greeter, and verifies the result before the build can succeed. |
+| `70-remove-virtualization.sh` | Removes the host virtualization stack the `-dx` base carries — libvirt, QEMU, `virt-manager`, libguestfs, SPICE and their firmware — keeping the guest-side integration and the container tools, and verifies both halves of that. |
+| `75-remove-base-apps.sh` | Removes the base applications this image replaces: Ptyxis for Ghostty, Visual Studio Code for Zed, the Cockpit web console, and the LXC and Incus container managers behind Podman and Docker. |
 | `90-cleanup.sh` | Finalises package and Flatpak sources, prunes build artifacts, and prepares for `bootc container lint`. |
 
 Helpers, not phases: `copr-helpers.sh` (sourced), `validate-brewfiles.sh`, and
@@ -23,7 +26,13 @@ Inactive until you activate them:
 - `30-tailscale.sh.example` — a third-party RPM repository done safely
 - `40-gnome-extensions.sh.example` — GNOME Shell extensions with a dconf override
 - `50-nvidia.sh.example` — NVIDIA drivers and CDI container support
-- `60-desktop-swap.sh.example` — replacing the GNOME desktop
+- `65-desktop-swap.sh.example` — replacing the GNOME desktop with COSMIC
+
+Two of those predate this image's desktop. `40-gnome-extensions.sh.example`
+and `65-desktop-swap.sh.example` both assume a GNOME session, which
+`60-niri-noctalia.sh` has already removed; they are kept as worked examples of
+a dconf override and of a destructive desktop swap, not as things to activate
+here.
 
 To activate one, rename it off `.example` and add a `RUN` block to the
 Containerfile after the package phase and before the cleanup phase. Copy the
