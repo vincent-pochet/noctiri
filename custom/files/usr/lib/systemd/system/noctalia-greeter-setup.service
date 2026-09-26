@@ -1,23 +1,27 @@
-# Lay out Noctalia Greeter's state directory on the booted system.
+# Prepare Noctalia Greeter for this machine, before greetd starts.
 #
-# The greeter keeps greeter.toml and sync.toml in /var/lib/noctalia-greeter,
-# which cannot ship in the image because build/90-cleanup.sh prunes /var.
-# GREETER_USER matches the `user` in /etc/greetd/config.toml; the helper would
-# otherwise guess it from the directory's owner, which does not exist yet.
+# Two per-machine things the image cannot carry: the state directory, because
+# build/90-cleanup.sh prunes /var, and the keyboard layout, because the
+# greeter's compositor reads no locale1 state and falls back to "us" -- which
+# turns a correct password into a PAM AUTH_ERR on any other layout.
+#
+# It runs on every boot rather than once: `localectl set-x11-keymap` has to
+# reach the login screen too, and the script is a rewrite, not an append.
+# GREETER_USER matches the `user` in /etc/greetd/config.toml; the vendor helper
+# would otherwise guess it from the directory's owner, which does not exist yet.
 
 [Unit]
-Description=Initialise the Noctalia Greeter state directory
+Description=Prepare Noctalia Greeter for this machine
 Documentation=https://docs.noctalia.dev
-ConditionPathExists=!/var/lib/noctalia-greeter/greeter.toml
 Before=greetd.service
-After=local-fs.target
+After=local-fs.target systemd-localed.service
 RequiresMountsFor=/var/lib
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 Environment=GREETER_USER=greetd
-ExecStart=/usr/bin/noctalia-greeter-apply-appearance --setup-system
+ExecStart=/usr/libexec/noctiri-greeter-setup.sh
 
 [Install]
 WantedBy=graphical.target

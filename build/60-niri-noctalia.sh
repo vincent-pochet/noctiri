@@ -197,6 +197,11 @@ test -d /usr/share/noctalia-greeter/assets
 test -x /usr/bin/noctalia-greeter-apply-appearance
 test -f /usr/share/polkit-1/actions/org.noctalia.greeter.apply-appearance.policy
 
+# From custom/files, via the overlay phase. rsync carries the mode across, and
+# a lost execute bit would leave the greeter with no state directory and no
+# keyboard layout -- the second of which reads as a rejected password.
+test -x /usr/libexec/noctiri-greeter-setup.sh
+
 echo "::endgroup::"
 
 echo "::group:: Configure and enable the greeter"

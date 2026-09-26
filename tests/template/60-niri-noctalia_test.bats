@@ -42,6 +42,7 @@ setup() {
 		"${ROOT}/usr/share/polkit-1/actions" \
 		"${ROOT}/usr/bin" \
 		"${ROOT}/usr/lib" \
+		"${ROOT}/usr/libexec" \
 		"${ROOT}/etc/niri" \
 		"${ROOT}/etc/pam.d" \
 		"${ROOT}/etc/pki/rpm-gpg" \
@@ -65,6 +66,10 @@ setup() {
 		chmod +x "${ROOT}/usr/bin/${binary}"
 	done
 	: >"${ROOT}/usr/share/polkit-1/actions/org.noctalia.greeter.apply-appearance.policy"
+
+	# The overlay phase already ran, so the template's own helper is in place.
+	install -m0755 "${REPO_ROOT}/custom/files/usr/libexec/noctiri-greeter-setup.sh" \
+		"${ROOT}/usr/libexec/noctiri-greeter-setup.sh"
 
 	# The vendor's PAM helper: adds the session line, leaves a backup.
 	cat >"${ROOT}/usr/share/noctalia-greeter/setup_greetd_pam.sh" <<EOF
@@ -391,6 +396,25 @@ EOF
 	grep -qx 'WantedBy=graphical.target' "${unit}"
 	# The helper would otherwise guess from an owner that does not exist yet.
 	grep -qx 'Environment=GREETER_USER=greetd' "${unit}"
+}
+
+@test "60-niri-noctalia: fails when the overlaid greeter helper is not executable" {
+	# rsync carries the mode across; a lost execute bit would ship a greeter
+	# with no keyboard layout, which reads as a rejected password.
+	chmod -x "${ROOT}/usr/libexec/noctiri-greeter-setup.sh"
+
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
+}
+
+@test "60-niri-noctalia: the state-directory unit runs the template's helper every boot" {
+	local unit="${REPO_ROOT}/custom/files/usr/lib/systemd/system/noctalia-greeter-setup.service"
+
+	grep -qx 'ExecStart=/usr/libexec/noctiri-greeter-setup.sh' "${unit}"
+	# A ConditionPathExists guard would pin the greeter to the layout the
+	# machine had on its first boot, so `localectl set-x11-keymap` would never
+	# reach the login screen.
+	! grep -q '^ConditionPathExists=' "${unit}"
 }
 
 @test "60-niri-noctalia: the unit names the same greeter account as greetd's config" {
