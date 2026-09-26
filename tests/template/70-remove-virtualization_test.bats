@@ -29,7 +29,8 @@ setup() {
 
 	mkdir -p "${STUB_BIN}" "${TEST_ROOT}/logs" \
 		"${ROOT}/usr/bin" \
-		"${ROOT}/usr/lib/systemd/system" \
+		"${ROOT}/usr/lib/binfmt.d" \
+		"${ROOT}/usr/lib/systemd/system/sysinit.target.wants" \
 		"${ROOT}/usr/lib/tmpfiles.d"
 
 	# The helper the base image writes itself, and its enablement.
@@ -37,6 +38,16 @@ setup() {
 		>"${ROOT}/usr/lib/systemd/system/libvirt-workaround.service"
 	printf 'd /var/log/libvirt 0750 - - - -\n' \
 		>"${ROOT}/usr/lib/tmpfiles.d/libvirt-workaround.conf"
+
+	# The aarch64 emulator as its package leaves it: a static binary, a binfmt
+	# registration ending in the F flag, and the unit systemd enables statically.
+	: >"${ROOT}/usr/bin/qemu-aarch64-static"
+	chmod +x "${ROOT}/usr/bin/qemu-aarch64-static"
+	printf ':qemu-aarch64:M::\\x7fELF:\\xff\\xff:/usr/bin/qemu-aarch64-static:F\n' \
+		>"${ROOT}/usr/lib/binfmt.d/qemu-aarch64-static.conf"
+	: >"${ROOT}/usr/lib/systemd/system/systemd-binfmt.service"
+	ln -sf ../systemd-binfmt.service \
+		"${ROOT}/usr/lib/systemd/system/sysinit.target.wants/systemd-binfmt.service"
 
 	# Line 1 is excluded so the shebang keeps pointing at the real /usr/bin/env.
 	# Both forms matter: mid-line, and a bare command at column 0.
@@ -50,7 +61,7 @@ setup() {
 
 	# What the image is expected to still carry once the phase has run: the
 	# guest side, the libraries the desktop links, and the container stack.
-	: "${MOCK_INSTALLED:=qemu-guest-agent spice-vdagent virt-what libosinfo localsearch nautilus podman docker-ce incus}"
+	: "${MOCK_INSTALLED:=qemu-guest-agent spice-vdagent virt-what libosinfo localsearch nautilus podman docker-ce qemu-user-static-aarch64}"
 	export MOCK_INSTALLED
 
 	for tool in dnf5 systemctl; do
@@ -158,6 +169,60 @@ _removal() {
 	local removal
 	removal="$(_removal)"
 	[[ "${removal}" != *" qemu* "* && "${removal}" != *" qemu*" ]]
+}
+
+@test "70-remove-virtualization: spares the aarch64 emulator from the qemu-user glob" {
+	# `qemu-user*` would otherwise take qemu-user-static-aarch64, and losing it
+	# silently turns this into an x86_64-only host for `podman build
+	# --platform=linux/arm64`.
+	run bash "${SCRIPT}"
+	[ "$status" -eq 0 ]
+
+	grep -qE '^remove -y .*--exclude=qemu-user-static-aarch64' "${DNF5_LOG}"
+}
+
+@test "70-remove-virtualization: still removes the other user-mode emulators" {
+	# The exclusion is one package wide, not a reprieve for the whole glob.
+	run bash "${SCRIPT}"
+	[ "$status" -eq 0 ]
+
+	local removal
+	removal="$(_removal)"
+	[[ "${removal}" == *" qemu-user* "* || "${removal}" == *" qemu-user*" ]]
+}
+
+@test "70-remove-virtualization: fails when the aarch64 emulator does not survive" {
+	# The --exclude is a no-op the day the package is renamed; this is what
+	# turns that into a failed build rather than a quietly x86_64-only image.
+	MOCK_INSTALLED="qemu-guest-agent spice-vdagent virt-what libosinfo localsearch nautilus podman docker-ce"
+
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
+}
+
+@test "70-remove-virtualization: fails when the binfmt registration is missing" {
+	# The emulator without its registration is a binary nothing ever invokes.
+	rm -f "${ROOT}/usr/lib/binfmt.d/qemu-aarch64-static.conf"
+
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
+}
+
+@test "70-remove-virtualization: fails when the binfmt registration drops the F flag" {
+	# Without F the kernel resolves the interpreter per-exec in the caller's
+	# mount namespace, so an arm64 container needs the emulator bind-mounted in.
+	printf ':qemu-aarch64:M::\\x7fELF:\\xff\\xff:/usr/bin/qemu-aarch64-static:\n' \
+		>"${ROOT}/usr/lib/binfmt.d/qemu-aarch64-static.conf"
+
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
+}
+
+@test "70-remove-virtualization: fails when nothing applies the binfmt registrations at boot" {
+	rm -f "${ROOT}/usr/lib/systemd/system/sysinit.target.wants/systemd-binfmt.service"
+
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
 }
 
 @test "70-remove-virtualization: disables and deletes the base image's libvirt helper" {
