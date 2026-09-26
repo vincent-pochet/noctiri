@@ -123,9 +123,12 @@ debug {
     honor-xdg-activation-with-invalid-serial
 }
 
-// Firefox picture-in-picture, floating. Matches host and Flatpak app-ids.
+// Picture-in-picture, floating. Zen is the default browser and Firefox is
+// still installable, and both are Gecko, so one rule covers them. The regex
+// is anchored at the end to match host and Flatpak app-ids alike: "firefox",
+// "org.mozilla.firefox", "zen", "app.zen_browser.zen".
 window-rule {
-    match app-id=r#"firefox$"# title="^Picture-in-Picture$"
+    match app-id=r#"(firefox|zen)$"# title="^Picture-in-Picture$"
     open-floating true
 }
 
