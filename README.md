@@ -8,9 +8,9 @@ A bootc operating system based on
 ## What makes this different from Bluefin DX
 
 This image is `ghcr.io/ublue-os/bluefin-dx:stable` with its own session. It
-keeps everything Bluefin puts *around* the desktop — the `ujust` recipes, the
+keeps everything Bluefin puts *around* the desktop, the `ujust` recipes, the
 Homebrew and Flatpak plumbing, `uupd`'s update policy, the codec and hardware
-enablement, Bazaar — and runs niri and Noctalia on top of it.
+enablement, Bazaar and runs niri and Noctalia on top of it.
 
 ### The developer tooling
 
@@ -68,12 +68,23 @@ Declared in [`custom/flatpaks/`](custom/flatpaks/default.preinstall) and
 installed by `flatpak preinstall` the first time the system boots with a
 network connection:
 
+- **Zen** (`app.zen_browser.zen`) — the browser, and the default handler for
+  `http`, `https` and HTML (see
+  [`custom/config/mimeapps.list`](custom/config/mimeapps.list))
 - **Zed** (`dev.zed.Zed`) — the editor, from the build its own project
   publishes on Flathub
-- **Thunderbird**, **Flatseal**, **Extension Manager**
+- **Thunderbird** (`org.mozilla.thunderbird`) — mail, calendar and newsgroups,
+  and the default handler for `mailto:`
+- **Flatseal**, **Extension Manager**
 
 ### Configuration changes
 
+- `~/.config/mimeapps.list` — seeded from
+  [`custom/config/`](custom/config/mimeapps.list) into every new account, making
+  Zen the default browser and Thunderbird the default mail and calendar client.
+  It is the highest-precedence file in the XDG association chain, so it wins
+  over the base image's defaults. An account that already exists keeps its own
+  copy; `ujust install-config` applies this one, backing up what it replaces
 - `/etc/niri/config.kdl` — the image's niri configuration, shipped through
   [`custom/files/`](custom/files/etc/niri/config.kdl) and validated by
   `niri validate` during the build, so a broken config fails CI rather than

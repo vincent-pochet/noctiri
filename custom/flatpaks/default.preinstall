@@ -12,8 +12,19 @@
 # App IDs are listed at https://flathub.org/ and verified by
 # `just validate-flatpaks` before a change can land.
 
+# The browser, and the default handler for http, https and HTML -- see
+# custom/config/mimeapps.list. Zen is a Firefox fork that ships no RPM, so
+# Flathub is the only packaging its project publishes for Fedora.
+[Flatpak Preinstall app.zen_browser.zen]
+Branch=stable
+
 # Email, calendar and newsgroup client. Fedora ships no mail client by default.
-[Flatpak Preinstall org.mozilla.Thunderbird]
+#
+# The lowercase id is the live one: Flathub split Thunderbird into a monthly
+# release channel (this one) and org.mozilla.thunderbird_esr, and marked the old
+# org.mozilla.Thunderbird end-of-life. That old id still resolves, so
+# `just validate-flatpaks` accepts it -- it is simply no longer built.
+[Flatpak Preinstall org.mozilla.thunderbird]
 Branch=stable
 
 # Audit and restrict the permissions of installed Flatpaks. There is no RPM
