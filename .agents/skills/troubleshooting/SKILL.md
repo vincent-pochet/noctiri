@@ -47,6 +47,7 @@ the README's Troubleshooting section.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `ujust` shows no custom commands | `60-custom.just` was not written or imported | check that `10-overlay.sh` copied the recipes |
+| the greeter rejects a correct password (greetd logs `AUTH_ERR`) | `greeter.toml` has no `[keyboard]`, so the greeter's compositor is on libxkbcommon's `us` default | `systemctl status noctalia-greeter-setup.service`; compare the file's `[keyboard]` against `localectl status`. `Ctrl+Alt+F3` uses the console keymap, so logging in there proves it is the layout, not the account |
 
 ## Capturing what you learned
 

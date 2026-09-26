@@ -93,8 +93,9 @@ network connection:
   greetd's own service account
 - `/etc/pam.d/greetd` — a required `pam_systemd.so` session line, so the
   greeter gets the logind session it needs to reach the seat
-- `noctalia-greeter-setup.service` — creates `/var/lib/noctalia-greeter` on
-  first boot, because `90-cleanup.sh` prunes `/var` out of the image
+- `noctalia-greeter-setup.service` — creates `/var/lib/noctalia-greeter`,
+  because `90-cleanup.sh` prunes `/var` out of the image, and syncs the
+  greeter's keyboard layout from `localed` on every boot
 - `display-manager.service` now points at `greetd`
 - `os-release` carries `VARIANT="Niri"` / `VARIANT_ID=niri`
 
@@ -175,6 +176,35 @@ needing a root shell.
 `greeter.toml` the first time the machine boots. It has to happen there rather
 than at build time: `build/90-cleanup.sh` prunes `/var`, so nothing written
 under it during the build survives into the shipped image.
+
+#### Its keyboard layout
+
+The same unit fills in `[keyboard]`, and that one is not cosmetic.
+
+The greeter's compositor builds its keymap with `xkb_keymap_new_from_names` and
+reads no `locale1` state of its own, so a `greeter.toml` without a `[keyboard]`
+section — which is exactly what the vendor's `--setup-system` writes — leaves
+libxkbcommon on its built-in default of `us`. On any other layout the password
+is then typed through the wrong keymap and greetd rejects it as a PAM
+`AUTH_ERR`, which is indistinguishable from getting the password wrong.
+
+niri behaves the opposite way, which is why
+[`/etc/niri/config.kdl`](custom/files/etc/niri/config.kdl) leaves its `xkb`
+block empty: the session follows the machine unaided, the login screen does not.
+
+[`/usr/libexec/noctiri-greeter-setup.sh`](custom/files/usr/libexec/noctiri-greeter-setup.sh)
+closes the gap. It reads `XKBLAYOUT`, `XKBVARIANT` and `XKBOPTIONS` from
+`/etc/vconsole.conf`, falls back to Xorg's `00-keyboard.conf`, and rewrites just
+those three keys — so `numlock` and anything else you put in `[keyboard]`
+survives. `localectl` stays the single place to change it:
+
+```bash
+sudo localectl set-x11-keymap ch pc105 fr
+sudo systemctl restart noctalia-greeter-setup.service
+```
+
+A machine that configures no X11 keymap is left alone rather than pinned to a
+layout it never asked for.
 
 #### On the Terra dependency
 
@@ -343,6 +373,12 @@ surprises:
 - **An unfamiliar login screen.** That is Noctalia Greeter: see
   [The greeter](#the-greeter). Log in and niri starts; if it does not,
   `journalctl -b -u greetd` and `journalctl --user -u niri` have the reason.
+- **The greeter rejects a password you know is right.** Check the layout before
+  the account: `grep -A4 '^\[keyboard\]' /var/lib/noctalia-greeter/greeter.toml`
+  against `localectl status`. A greeter with no `[keyboard]` section types on a
+  US keymap; `systemctl status noctalia-greeter-setup.service` says why it did
+  not get one. A text login on `Ctrl+Alt+F3` uses the console keymap instead,
+  so it working there confirms the layout rather than the password.
 - **A greeter that does not match your desktop theme.** Run
   `noctalia msg greeter-sync` from the session. If the state directory is
   missing entirely, `systemctl status noctalia-greeter-setup.service` says
