@@ -24,9 +24,9 @@ set -euo pipefail
 # hundreds of packages that are already installed.
 #
 # To use this script:
-# 1. Rename it to remove the .example extension: 60-desktop-swap.sh
+# 1. Rename it to remove the .example extension: 65-desktop-swap.sh
 # 2. Add the explicit RUN block from build/README.md for
-#    /ctx/build/60-desktop-swap.sh after the 20-packages-and-services.sh block
+#    /ctx/build/65-desktop-swap.sh after the 20-packages-and-services.sh block
 #    and before the 90-cleanup.sh block in the Containerfile.
 #
 # Test in a VM before trusting it. An image with no display manager boots to a

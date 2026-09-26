@@ -1,0 +1,35 @@
+# Default applications, seeded into every new user's ~/.config/mimeapps.list.
+#
+# This is the highest-precedence file in the XDG association chain, so it wins
+# over whatever the base image and the Flatpak exports register. Existing users
+# keep their own copy; `ujust install-config` is the explicit way to take this
+# one, and it backs up the file it replaces.
+#
+# Both applications arrive on first boot from custom/flatpaks/default.preinstall,
+# so these desktop ids do not resolve until then. An entry naming a desktop file
+# that is not installed yet is skipped, not an error, so the ordering is safe.
+#
+# Zen claims x-scheme-handler/mailto in its own desktop file. Thunderbird is
+# named for the mail and calendar types below so the browser does not take
+# mailto: links off it on a first-installed-wins basis.
+
+[Default Applications]
+x-scheme-handler/http=app.zen_browser.zen.desktop
+x-scheme-handler/https=app.zen_browser.zen.desktop
+x-scheme-handler/chrome=app.zen_browser.zen.desktop
+x-scheme-handler/about=app.zen_browser.zen.desktop
+x-scheme-handler/unknown=app.zen_browser.zen.desktop
+text/html=app.zen_browser.zen.desktop
+application/xhtml+xml=app.zen_browser.zen.desktop
+application/x-extension-html=app.zen_browser.zen.desktop
+application/x-extension-xhtml=app.zen_browser.zen.desktop
+application/x-extension-htm=app.zen_browser.zen.desktop
+application/x-extension-shtml=app.zen_browser.zen.desktop
+application/x-extension-xht=app.zen_browser.zen.desktop
+
+x-scheme-handler/mailto=org.mozilla.thunderbird.desktop
+x-scheme-handler/mid=org.mozilla.thunderbird.desktop
+x-scheme-handler/webcal=org.mozilla.thunderbird.desktop
+x-scheme-handler/webcals=org.mozilla.thunderbird.desktop
+message/rfc822=org.mozilla.thunderbird.desktop
+text/calendar=org.mozilla.thunderbird.desktop

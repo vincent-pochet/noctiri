@@ -16,5 +16,12 @@ Common ships. Overriding that way is intended.
 `custom/files/` is the seam for system payloads outside `~/.config/`. The
 `customize` skill decides which seam a given file belongs in.
 
+`mimeapps.list` is the image's default-application table: Zen for the web
+types, Thunderbird for mail and calendar. It is the first file the XDG
+association chain reads, so it wins over the base image's defaults and over the
+associations the Flatpak exports register. Both applications arrive on first
+boot from `custom/flatpaks/`, and an entry naming a desktop file that is not
+installed yet is skipped rather than an error.
+
 `environment.d/10-example.conf` is the shipped example: inert as written, and
 safe to replace.

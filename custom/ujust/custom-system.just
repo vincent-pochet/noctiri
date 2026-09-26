@@ -8,18 +8,19 @@
 ## user configuration or change group membership. These recipes are the
 ## explicit, user-invoked way to do both.
 
-# Add the current user to the docker and libvirt groups, creating them if needed.
+# Add the current user to the docker group, creating it if needed.
 [group('System')]
 configure-dev-groups:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    # Fedora ships no /usr/lib/group entry to copy for either name, and both
-    # daemons are opt-in for a fork, so create a group when it is missing rather
-    # than assume a package provided it. Only the mutating commands escalate;
-    # the checks run as the invoking user.
+    # Fedora ships no /usr/lib/group entry to copy for the name, and the daemon
+    # is opt-in for a fork, so create the group when it is missing rather than
+    # assume a package provided it. The list is an array because a fork that
+    # adds another daemon adds a name here and nothing else. Only the mutating
+    # commands escalate; the checks run as the invoking user.
     CURRENT_USER="$(id -un)"
-    DEV_GROUPS=(docker libvirt)
+    DEV_GROUPS=(docker)
     MISSING=()
 
     for group in "${DEV_GROUPS[@]}"; do
@@ -47,7 +48,7 @@ configure-dev-groups:
     GROUP_LIST="$(IFS=,; echo "${MISSING[*]}")"
     sudo usermod --append --groups "${GROUP_LIST}" "${CURRENT_USER}"
     echo "Added ${CURRENT_USER} to: ${MISSING[*]}"
-    echo "Log out and back in before using docker or libvirt without sudo."
+    echo "Log out and back in before using docker without sudo."
 
 # Restore the image's default user configuration into this user's home.
 [group('System')]
@@ -134,4 +135,39 @@ install-config:
         for entry in "${backed_up[@]}"; do
             echo "  - ${entry}.backup.${TIMESTAMP}"
         done
+    fi
+
+# Copy the image's niri configuration into this user's home, so it can be edited.
+[group('Desktop')]
+niri-edit-config:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # niri reads ~/.config/niri/config.kdl first and /etc/niri/config.kdl only
+    # as a fallback. Editing the image's copy is the wrong move: /etc is
+    # three-way merged on every image update. Reverting is deleting the copy.
+    SYSTEM_CONFIG=/etc/niri/config.kdl
+    USER_CONFIG="${XDG_CONFIG_HOME:-${HOME}/.config}/niri/config.kdl"
+
+    if [[ ! -f "${SYSTEM_CONFIG}" ]]; then
+        echo "No ${SYSTEM_CONFIG}: this image does not ship a niri configuration."
+        exit 1
+    fi
+
+    if [[ -e "${USER_CONFIG}" ]]; then
+        echo "Editing your existing ${USER_CONFIG}"
+    else
+        mkdir -p "$(dirname "${USER_CONFIG}")"
+        cp "${SYSTEM_CONFIG}" "${USER_CONFIG}"
+        echo "Copied ${SYSTEM_CONFIG} to ${USER_CONFIG}"
+    fi
+
+    "${EDITOR:-nano}" "${USER_CONFIG}"
+
+    # niri applies a valid config on write and keeps the previous one otherwise.
+    if niri validate --config "${USER_CONFIG}"; then
+        echo "Configuration is valid; niri has already reloaded it."
+    else
+        echo "Configuration is invalid. niri kept the last good one; fix it and save again."
+        exit 1
     fi
