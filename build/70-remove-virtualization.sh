@@ -25,6 +25,14 @@ set -euo pipefail
 #   passt, slirp4netns
 #       Rootless podman networking. Named here because they read as
 #       virtualization and are not.
+#   qemu-user-static-aarch64
+#       User-mode emulation, which is a container concern rather than a host
+#       virtualization one: it is what lets `podman build --platform=linux/arm64`
+#       and `podman run --arch=arm64` work on this x86_64 host. It links
+#       nothing, carries a static binary, and registers itself through
+#       /usr/lib/binfmt.d with the `F` flag, so the kernel holds the
+#       interpreter open and an arm64 container needs nothing mounted into it.
+#       systemd-binfmt.service applies that at boot and is statically enabled.
 #
 # dnf5 takes dependents along, and three of them are worth knowing about:
 #
@@ -54,7 +62,12 @@ echo "::group:: Remove the virtualization stack"
 # The qemu-* plugin packages -- audio, block, char, display, UI -- all require
 # qemu-common and leave with it. qemu-guest-agent does not require it, which is
 # why naming the emulators here does not take the guest agent along.
+#
+# --exclude spares one package from the `qemu-user*` glob. The alternative is
+# naming the other eighteen architectures, which would then have to be revised
+# every time Fedora packages a nineteenth.
 dnf5 remove -y \
+	--exclude=qemu-user-static-aarch64 \
 	"libvirt*" \
 	python3-libvirt \
 	virt-manager \
@@ -115,11 +128,21 @@ if [[ -e /usr/bin/qemu-system-x86_64 || -e /usr/bin/virsh ]]; then
 	exit 1
 fi
 
+# Cross-architecture container builds. The --exclude above is a no-op the day
+# this package is renamed, and the failure would be a silently x86_64-only
+# image, so the emulator, its binfmt registration and the unit that applies it
+# are all asserted rather than assumed.
+rpm -q qemu-user-static-aarch64
+test -x /usr/bin/qemu-aarch64-static
+test -f /usr/lib/binfmt.d/qemu-aarch64-static.conf
+grep -q ':F$' /usr/lib/binfmt.d/qemu-aarch64-static.conf
+test -L /usr/lib/systemd/system/sysinit.target.wants/systemd-binfmt.service
+
 # The guest side, the libraries the desktop links, and the container stack that
-# replaces all of the above.
+# replaces the host virtualization half.
 rpm -q qemu-guest-agent spice-vdagent virt-what
 rpm -q libosinfo localsearch nautilus
-rpm -q podman docker-ce incus
+rpm -q podman docker-ce
 
 echo "::endgroup::"
 

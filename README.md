@@ -27,8 +27,7 @@ ujust configure-dev-groups
 ```
 
 Podman and Docker are the whole of it, and the editor is Zed. Two build phases
-say so explicitly, which is worth reading before wondering where something
-went:
+say what left, which is worth reading before wondering where something went:
 [`build/70-remove-virtualization.sh`](build/70-remove-virtualization.sh) takes
 out the host virtualization stack, and
 [`build/75-remove-base-apps.sh`](build/75-remove-base-apps.sh) the applications
