@@ -65,6 +65,10 @@ dnf5 install -y nautilus
 # written for adw-gtk3. custom/config/noctalia/ turns those templates on.
 dnf5 install -y adw-gtk3-theme
 
+# Likewise unrequired by anything, and it owns the SSH agent this session runs:
+# see "Restore the SSH agent" below.
+dnf5 install -y gcr
+
 echo "::endgroup::"
 
 echo "::group:: Install the greeter"
@@ -264,6 +268,37 @@ rm -f /etc/systemd/system/display-manager.service
 systemctl enable greetd.service
 
 systemctl set-default graphical.target
+
+echo "::endgroup::"
+
+echo "::group:: Restore the SSH agent"
+
+###############################################################################
+# Restore the SSH agent
+###############################################################################
+# gnome-session started an SSH agent; removing GNOME above took that with it,
+# and niri starts nothing in its place. Fedora ships gcr's agent disabled and
+# expects a desktop session to enable it, so without this the image has no
+# agent at all.
+#
+# The failure is quiet and reads as the user's own mistake. gcr's socket unit
+# still sets SSH_AUTH_SOCK to %t/gcr/ssh, so ssh is pointed at a socket nobody
+# is listening on: a passphrased key then fails with `Permission denied
+# (publickey)` while sitting in plain sight in ~/.ssh, and `ssh-add -l` answers
+# "Error connecting to agent". Nothing names the session as the cause.
+#
+# --global is what makes it every user's default: it links the unit into
+# /etc/systemd/user/, which each user's systemd instance reads. It stays a
+# default -- `systemctl --user disable gcr-ssh-agent.socket` masks it per user.
+#
+# Socket-activated, so enabling it costs nothing until something connects, and
+# the agent picks its passphrases up from the login keyring that
+# pam_gnome_keyring unlocks in /etc/pam.d/greetd.
+###############################################################################
+
+test -f /usr/lib/systemd/user/gcr-ssh-agent.socket
+systemctl --global enable gcr-ssh-agent.socket
+test -L /etc/systemd/user/sockets.target.wants/gcr-ssh-agent.socket
 
 echo "::endgroup::"
 
