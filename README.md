@@ -52,6 +52,8 @@ Applications and the utilities the session calls:
 - **ghostty** — the terminal, from the `scottames/ghostty` COPR, installed
   isolated so the repository is not left enabled in the image
 - **nautilus** — the file manager, inherited from Bluefin and kept explicitly
+- **adw-gtk3-theme** — inherited the same way, and kept explicitly because
+  nothing requires it: it is the GTK 3 theme Noctalia's templates apply
 - **gnome-keyring**, **gnome-keyring-pam** — Secret Service, unlocked at login
 - **upower**, **ddcutil** — battery readings, and brightness on external
   monitors over DDC/CI
@@ -85,6 +87,10 @@ network connection:
   It is the highest-precedence file in the XDG association chain, so it wins
   over the base image's defaults. An account that already exists keeps its own
   copy; `ujust install-config` applies this one, backing up what it replaces
+- `~/.config/noctalia/10-theme-templates.toml` — seeded the same way from
+  [`custom/config/`](custom/config/noctalia/10-theme-templates.toml), turning on
+  the Noctalia templates that carry the session's colour scheme into GTK
+  applications. Its own comments cover the rest
 - `/etc/niri/config.kdl` — the image's niri configuration, shipped through
   [`custom/files/`](custom/files/etc/niri/config.kdl) and validated by
   `niri validate` during the build, so a broken config fails CI rather than

@@ -39,7 +39,10 @@ setup() {
 		"${ROOT}/usr/share/wayland-sessions" \
 		"${ROOT}/usr/share/xdg-desktop-portal" \
 		"${ROOT}/usr/share/noctalia-greeter/assets" \
+		"${ROOT}/usr/share/noctalia/assets/templates/gtk" \
+		"${ROOT}/usr/share/themes/adw-gtk3-dark" \
 		"${ROOT}/usr/share/polkit-1/actions" \
+		"${ROOT}/etc/skel/.config/noctalia" \
 		"${ROOT}/usr/bin" \
 		"${ROOT}/usr/lib" \
 		"${ROOT}/usr/libexec" \
@@ -55,6 +58,15 @@ setup() {
 	printf 'NAME="Noctiri"\nID=noctiri\nVERSION_ID=44\nVARIANT="Stale"\nVARIANT_ID=stale\n' \
 		>"${ROOT}/usr/lib/os-release"
 	cp "${REPO_ROOT}/custom/files/etc/niri/config.kdl" "${ROOT}/etc/niri/config.kdl"
+
+	# The noctalia package's template catalog, and the theme their apply hook
+	# reaches for. Only the two files the script asserts on are needed.
+	: >"${ROOT}/usr/share/noctalia/assets/templates/gtk/gtk3.css"
+	: >"${ROOT}/usr/share/noctalia/assets/templates/gtk/gtk4.css"
+
+	# The overlay phase seeded /etc/skel/.config from custom/config/.
+	cp "${REPO_ROOT}"/custom/config/noctalia/*.toml \
+		"${ROOT}/etc/skel/.config/noctalia/"
 	ln -sf /usr/lib/systemd/system/gdm.service \
 		"${ROOT}/etc/systemd/system/display-manager.service"
 
@@ -227,6 +239,63 @@ teardown() {
 @test "60-niri-noctalia: fails when niri's portal configuration is missing" {
 	rm -f "${ROOT}/usr/share/xdg-desktop-portal/niri-portals.conf"
 	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
+}
+
+@test "60-niri-noctalia: fails when the GTK templates are gone from the shell" {
+	# custom/config/noctalia/ names gtk3 and gtk4 by id. Dropped upstream,
+	# they become two ignored lines rather than an error, and GTK applications
+	# quietly stop following the palette.
+	rm -f "${ROOT}/usr/share/noctalia/assets/templates/gtk/gtk4.css"
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
+}
+
+@test "60-niri-noctalia: fails when the GTK 3 theme the templates expect is gone" {
+	# Nothing requires adw-gtk3-theme, so a base-image change could drop it.
+	# The templates' apply hook skips setting gtk-theme when it is missing.
+	rm -rf "${ROOT}/usr/share/themes/adw-gtk3-dark"
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
+}
+
+@test "60-niri-noctalia: installs the GTK 3 theme the templates apply" {
+	run bash "${SCRIPT}"
+	[ "$status" -eq 0 ]
+
+	grep -qx -- 'install -y adw-gtk3-theme' "${DNF5_LOG}"
+}
+
+@test "60-niri-noctalia: validates the Noctalia defaults seeded into /etc/skel" {
+	# The overlay phase put them there; this is the only point in the build
+	# where the shell exists to check them. An unknown key or a bad value
+	# would be a broken config in every account created from the skeleton.
+	run bash "${SCRIPT}"
+	[ "$status" -eq 0 ]
+
+	grep -qx "config validate ${ROOT}/etc/skel/.config/noctalia" "${NOCTALIA_LOG}"
+}
+
+@test "60-niri-noctalia: fails when Noctalia rejects the seeded defaults" {
+	cat >"${STUB_BIN}/noctalia" <<'EOF'
+#!/usr/bin/bash
+printf '%s\n' "$*" >> "${NOCTALIA_LOG}"
+[[ "$1" == "config" ]] && exit 1
+exit 0
+EOF
+	chmod +x "${STUB_BIN}/noctalia"
+
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
+}
+
+@test "60-niri-noctalia: skips the check when a fork ships no Noctalia defaults" {
+	# custom/config/noctalia/ is a seam, not a requirement.
+	rm -rf "${ROOT}/etc/skel/.config/noctalia"
+	run bash "${SCRIPT}"
+	[ "$status" -eq 0 ]
+
+	run grep -q "config validate" "${NOCTALIA_LOG}"
 	[ "$status" -ne 0 ]
 }
 
