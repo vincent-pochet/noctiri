@@ -54,6 +54,8 @@ Applications and the utilities the session calls:
 - **nautilus** — the file manager, inherited from Bluefin and kept explicitly
 - **adw-gtk3-theme** — inherited the same way, and kept explicitly because
   nothing requires it: it is the GTK 3 theme Noctalia's templates apply
+- **gcr** — inherited and kept explicitly for the same reason: it owns
+  `gcr-ssh-agent.socket`, the SSH agent that left with `gnome-session`
 - **gnome-keyring**, **gnome-keyring-pam** — Secret Service, unlocked at login
 - **upower**, **ddcutil** — battery readings, and brightness on external
   monitors over DDC/CI
@@ -389,6 +391,13 @@ surprises:
   `noctalia msg greeter-sync` from the session. If the state directory is
   missing entirely, `systemctl status noctalia-greeter-setup.service` says
   why it did not run.
+- **`git push` over SSH fails with `Permission denied (publickey)`.** Check the
+  agent before the key: `ssh-add -l` answering `Error connecting to agent` means
+  `gcr-ssh-agent.socket` is not running. The image enables it for every user, so
+  a `systemctl --user is-enabled gcr-ssh-agent.socket` that says `disabled` is
+  an account that turned it off; `systemctl --user enable --now
+  gcr-ssh-agent.socket` puts it back. A passphrased key is cached in the login
+  keyring, which `pam_gnome_keyring` unlocks at login
 - **A bar-less, wallpaper-less niri.** Noctalia is started by niri through
   `spawn-at-startup` in `/etc/niri/config.kdl`. A `~/.config/niri/config.kdl`
   copied from an older image, or from upstream niri, will not have that line.

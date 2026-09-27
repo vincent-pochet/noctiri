@@ -59,6 +59,11 @@ setup() {
 		>"${ROOT}/usr/lib/os-release"
 	cp "${REPO_ROOT}/custom/files/etc/niri/config.kdl" "${ROOT}/etc/niri/config.kdl"
 
+	# gcr's socket unit, as the package leaves it: shipped but not enabled.
+	mkdir -p "${ROOT}/usr/lib/systemd/user"
+	printf '[Socket]\nListenStream=%%t/gcr/ssh\n' \
+		>"${ROOT}/usr/lib/systemd/user/gcr-ssh-agent.socket"
+
 	# The noctalia package's template catalog, and the theme their apply hook
 	# reaches for. Only the two files the script asserts on are needed.
 	: >"${ROOT}/usr/share/noctalia/assets/templates/gtk/gtk3.css"
@@ -129,7 +134,7 @@ exit 0
 EOF
 	chmod +x "${STUB_BIN}/gpg"
 
-	for tool in dnf5 systemctl rpm niri noctalia; do
+	for tool in dnf5 rpm niri noctalia; do
 		local log_var
 		log_var="$(printf '%s' "${tool}" | tr '[:lower:]' '[:upper:]')_LOG"
 		cat >"${STUB_BIN}/${tool}" <<EOF
@@ -139,6 +144,21 @@ exit 0
 EOF
 		chmod +x "${STUB_BIN}/${tool}"
 	done
+
+	# systemctl logs like the rest, and additionally does the one thing the
+	# script checks for afterwards: `--global enable` links the unit into
+	# /etc/systemd/user/. A stub that only logged would fail that assertion.
+	cat >"${STUB_BIN}/systemctl" <<EOF
+#!/usr/bin/bash
+printf '%s\n' "\$*" >> "\${SYSTEMCTL_LOG}"
+if [[ "\$1" == "--global" && "\$2" == "enable" ]]; then
+    mkdir -p "${ROOT}/etc/systemd/user/sockets.target.wants"
+    ln -sf "/usr/lib/systemd/user/\$3" \
+        "${ROOT}/etc/systemd/user/sockets.target.wants/\$3"
+fi
+exit 0
+EOF
+	chmod +x "${STUB_BIN}/systemctl"
 }
 
 teardown() {
@@ -496,6 +516,32 @@ EOF
 	config_user="$(sed -nE 's/^user = "(.+)"$/\1/p' "${ROOT}/etc/greetd/config.toml")"
 	[ -n "${unit_user}" ]
 	[ "${unit_user}" = "${config_user}" ]
+}
+
+@test "60-niri-noctalia: enables gcr's SSH agent for every user" {
+	# gnome-session used to start an agent; the GNOME removal above took it
+	# away and niri starts nothing. --global is what makes it a default for
+	# every account rather than one the first user has to discover.
+	run bash "${SCRIPT}"
+	[ "$status" -eq 0 ]
+
+	grep -qx -- '--global enable gcr-ssh-agent.socket' "${SYSTEMCTL_LOG}"
+	[ -L "${ROOT}/etc/systemd/user/sockets.target.wants/gcr-ssh-agent.socket" ]
+}
+
+@test "60-niri-noctalia: installs the package that owns the SSH agent" {
+	run bash "${SCRIPT}"
+	[ "$status" -eq 0 ]
+
+	grep -qx -- 'install -y gcr' "${DNF5_LOG}"
+}
+
+@test "60-niri-noctalia: fails when gcr ships no socket unit to enable" {
+	# Nothing requires gcr, so a base-image change could drop it. Enabling a
+	# unit that is not there would otherwise leave the session with no agent.
+	rm -f "${ROOT}/usr/lib/systemd/user/gcr-ssh-agent.socket"
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
 }
 
 @test "60-niri-noctalia: clears the dangling display-manager alias before enabling greetd" {
