@@ -58,6 +58,13 @@ copr_install_isolated "scottames/ghostty" ghostty
 # because /etc/niri/config.kdl binds Mod+E to it.
 dnf5 install -y nautilus
 
+# Also from the base image, and nothing requires it, so it would leave silently.
+# It is the GTK 3 half of Noctalia's gtk3/gtk4 templates: the templates' apply
+# hook sets gtk-theme to adw-gtk3 or adw-gtk3-dark and skips that step when the
+# theme is absent, leaving GTK 3 applications on Adwaita with a stylesheet
+# written for adw-gtk3. custom/config/noctalia/ turns those templates on.
+dnf5 install -y adw-gtk3-theme
+
 echo "::endgroup::"
 
 echo "::group:: Install the greeter"
@@ -179,6 +186,22 @@ fi
 # backends, which is why this image ships no portal config of its own.
 rpm -q xdg-desktop-portal-gnome xdg-desktop-portal-gtk gnome-keyring
 test -f /usr/share/xdg-desktop-portal/niri-portals.conf
+
+# The builtin templates custom/config/noctalia/ selects, and the GTK 3 theme
+# their apply hook expects. A template dropped upstream would otherwise be a
+# line in a config file that Noctalia silently ignores.
+test -f /usr/share/noctalia/assets/templates/gtk/gtk3.css
+test -f /usr/share/noctalia/assets/templates/gtk/gtk4.css
+test -d /usr/share/themes/adw-gtk3-dark
+
+# The same argument as `niri validate` below, for the other half of the
+# session. The overlay phase seeded this from custom/config/, and an unknown
+# key or a bad value would be a broken Noctalia config in every new account.
+# Whole directory rather than a filename, so it follows the seam and not one
+# file; a fork that ships no Noctalia defaults has nothing to check.
+if [[ -d /etc/skel/.config/noctalia ]]; then
+	noctalia config validate /etc/skel/.config/noctalia
+fi
 
 # custom/files placed the config during the overlay phase; this is the first
 # point in the build where a compositor exists to check it.

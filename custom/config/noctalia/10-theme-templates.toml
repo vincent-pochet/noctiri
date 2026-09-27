@@ -1,0 +1,22 @@
+# Carry the session's colour scheme into GTK applications.
+#
+# Noctalia loads every *.toml in ~/.config/noctalia/ and then lets
+# ~/.local/state/noctalia/settings.toml override the result. Settings is what
+# writes that second file, so everything here is a default the user can change
+# in the UI rather than a setting the image holds down.
+#
+# builtin_ids selects from the templates Noctalia ships in
+# /usr/share/noctalia/assets/templates/. gtk3 and gtk4 render the active
+# palette to ~/.config/gtk-{3,4}.0/noctalia.css, add the @import that pulls it
+# into gtk.css, and set org.gnome.desktop.interface gtk-theme to
+# adw-gtk3/adw-gtk3-dark with the matching color-scheme. Flatpaks follow too:
+# Flatpak bind-mounts both gtk.css files into the sandbox read-only, and pulls
+# the matching org.gtk.Gtk3theme.adw-gtk3 extension for GTK 3 applications.
+#
+# They re-render whenever the palette or the light/dark mode changes;
+# `noctalia msg templates-apply` does it on demand. The same list takes `qt`
+# for qt5ct/qt6ct and `kcolorscheme` for KDE applications, neither of which
+# this image installs a configuration tool for.
+
+[theme.templates]
+builtin_ids = [ "gtk3", "gtk4" ]
