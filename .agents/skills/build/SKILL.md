@@ -60,6 +60,22 @@ like `silverblue` would silently mislabel a CentOS or Hummingbird fork. `just
 build` fills it from the `FROM` line and `00-image-info.sh` hard-fails on an empty
 value, so build through `just`; a bare `podman build .` is unsupported.
 
+## Image identity
+
+`00-image-info.sh` owns `/usr/lib/os-release`. It claims every key that names the
+operating system — `NAME`, `PRETTY_NAME`, `ID`, `DEFAULT_HOSTNAME`, `CPE_NAME`,
+`VARIANT_ID`, the URLs — because a key left at the base image's value is a key
+through which the installed system keeps introducing itself as its base. `ID` and
+`DEFAULT_HOSTNAME` are the two that reach past cosmetics: systemd falls back to
+`DEFAULT_HOSTNAME` for an unconfigured hostname, and bootc installers derive the
+ostree stateroot name from `ID`. Taking `ID` is why `ID_LIKE` is rebuilt from the
+base's own `ID` and `ID_LIKE` — otherwise the base drops out of the derivation
+chain that scripts fall back to.
+
+Keys that describe the *base* stay as they are: `VERSION_ID`, `VERSION_CODENAME`,
+`SUPPORT_END`. `60-niri-noctalia.sh` then overwrites `VARIANT`/`VARIANT_ID` with
+the desktop, which is the one place two phases write the same key.
+
 ## Examples
 
 `build/*.sh.example` are inactive until you activate them: rename the file off

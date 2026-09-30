@@ -117,9 +117,41 @@ EOF
 # values. Fedora Silverblue already has VARIANT_ID, so appending only when it
 # was absent left installed Finpilot images reporting themselves as Fedora.
 if [[ -f "${OS_RELEASE}" ]]; then
+    # Read the base image's derivation chain before ID is overwritten below.
+    # Taking ID for this image drops the base distro out of the chain, and
+    # ID_LIKE is where a well-behaved script looks once ID is unfamiliar.
+    BASE_ID="$(sed -n 's/^ID="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "${OS_RELEASE}")"
+    BASE_ID_LIKE="$(sed -n 's/^ID_LIKE="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "${OS_RELEASE}")"
+
+    # Closest ancestor first, per the os-release spec. Dropping IMAGE_NAME
+    # keeps a repeat run from listing this image as its own ancestor.
+    ID_LIKE_VALUE=""
+    for ancestor in ${BASE_ID} ${BASE_ID_LIKE}; do
+        [[ "${ancestor}" == "${IMAGE_NAME}" ]] && continue
+        [[ " ${ID_LIKE_VALUE} " == *" ${ancestor} "* ]] && continue
+        ID_LIKE_VALUE="${ID_LIKE_VALUE:+${ID_LIKE_VALUE} }${ancestor}"
+    done
+
     set_os_release_value "VARIANT_ID" "${IMAGE_NAME}"
     set_os_release_value "PRETTY_NAME" "${IMAGE_NAME} (Version: ${VERSION})"
     set_os_release_value "NAME" "${IMAGE_NAME}"
+
+    # ID is the machine-readable identity. Leaving the base's value here is
+    # what makes an installed image keep introducing itself as its base:
+    # systemd falls back to DEFAULT_HOSTNAME for an unconfigured hostname, and
+    # bootc installers derive the ostree stateroot name from ID. Neither is
+    # retroactive -- an existing install keeps the stateroot and hostname it
+    # was given.
+    set_os_release_value "ID" "${IMAGE_NAME}"
+    if [[ -n "${ID_LIKE_VALUE}" ]]; then
+        set_os_release_value "ID_LIKE" "${ID_LIKE_VALUE}"
+    fi
+    set_os_release_value "DEFAULT_HOSTNAME" "${IMAGE_NAME}"
+
+    # No CPE vendor here is registered with NIST, so this string matches no CVE
+    # feed either way. It is still worth owning: leaving it is a claim to be
+    # the base image, which is the one reading a scanner would act on.
+    set_os_release_value "CPE_NAME" "cpe:/o:${IMAGE_VENDOR}:${IMAGE_NAME}:${FEDORA_MAJOR_VERSION}"
     set_os_release_value "HOME_URL" "${HOME_URL}"
     set_os_release_value "DOCUMENTATION_URL" "${DOCUMENTATION_URL}"
     set_os_release_value "SUPPORT_URL" "${SUPPORT_URL}"
