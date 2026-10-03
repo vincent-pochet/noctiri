@@ -23,5 +23,14 @@ associations the Flatpak exports register. Both applications arrive on first
 boot from `custom/flatpaks/`, and an entry naming a desktop file that is not
 installed yet is skipped rather than an error.
 
+`noctalia/10-theme-templates.toml` turns on Noctalia's `gtk3` and `gtk4`
+templates, which is what carries the session's colour scheme into GTK
+applications. Noctalia reads every `*.toml` in this directory and then lets
+`~/.local/state/noctalia/settings.toml` — the file its Settings UI writes —
+override the result, so this is a default rather than a setting the image holds
+down. `build/60-niri-noctalia.sh` runs `noctalia config validate` over the
+seeded directory, so an unknown key fails the build instead of every new
+account.
+
 `environment.d/10-example.conf` is the shipped example: inert as written, and
 safe to replace.

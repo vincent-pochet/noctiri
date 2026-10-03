@@ -39,9 +39,13 @@ setup() {
 		"${ROOT}/usr/share/wayland-sessions" \
 		"${ROOT}/usr/share/xdg-desktop-portal" \
 		"${ROOT}/usr/share/noctalia-greeter/assets" \
+		"${ROOT}/usr/share/noctalia/assets/templates/gtk" \
+		"${ROOT}/usr/share/themes/adw-gtk3-dark" \
 		"${ROOT}/usr/share/polkit-1/actions" \
+		"${ROOT}/etc/skel/.config/noctalia" \
 		"${ROOT}/usr/bin" \
 		"${ROOT}/usr/lib" \
+		"${ROOT}/usr/libexec" \
 		"${ROOT}/etc/niri" \
 		"${ROOT}/etc/pam.d" \
 		"${ROOT}/etc/pki/rpm-gpg" \
@@ -54,6 +58,20 @@ setup() {
 	printf 'NAME="Noctiri"\nID=noctiri\nVERSION_ID=44\nVARIANT="Stale"\nVARIANT_ID=stale\n' \
 		>"${ROOT}/usr/lib/os-release"
 	cp "${REPO_ROOT}/custom/files/etc/niri/config.kdl" "${ROOT}/etc/niri/config.kdl"
+
+	# gcr's socket unit, as the package leaves it: shipped but not enabled.
+	mkdir -p "${ROOT}/usr/lib/systemd/user"
+	printf '[Socket]\nListenStream=%%t/gcr/ssh\n' \
+		>"${ROOT}/usr/lib/systemd/user/gcr-ssh-agent.socket"
+
+	# The noctalia package's template catalog, and the theme their apply hook
+	# reaches for. Only the two files the script asserts on are needed.
+	: >"${ROOT}/usr/share/noctalia/assets/templates/gtk/gtk3.css"
+	: >"${ROOT}/usr/share/noctalia/assets/templates/gtk/gtk4.css"
+
+	# The overlay phase seeded /etc/skel/.config from custom/config/.
+	cp "${REPO_ROOT}"/custom/config/noctalia/*.toml \
+		"${ROOT}/etc/skel/.config/noctalia/"
 	ln -sf /usr/lib/systemd/system/gdm.service \
 		"${ROOT}/etc/systemd/system/display-manager.service"
 
@@ -65,6 +83,10 @@ setup() {
 		chmod +x "${ROOT}/usr/bin/${binary}"
 	done
 	: >"${ROOT}/usr/share/polkit-1/actions/org.noctalia.greeter.apply-appearance.policy"
+
+	# The overlay phase already ran, so the template's own helper is in place.
+	install -m0755 "${REPO_ROOT}/custom/files/usr/libexec/noctiri-greeter-setup.sh" \
+		"${ROOT}/usr/libexec/noctiri-greeter-setup.sh"
 
 	# The vendor's PAM helper: adds the session line, leaves a backup.
 	cat >"${ROOT}/usr/share/noctalia-greeter/setup_greetd_pam.sh" <<EOF
@@ -112,7 +134,7 @@ exit 0
 EOF
 	chmod +x "${STUB_BIN}/gpg"
 
-	for tool in dnf5 systemctl rpm niri noctalia; do
+	for tool in dnf5 rpm niri noctalia; do
 		local log_var
 		log_var="$(printf '%s' "${tool}" | tr '[:lower:]' '[:upper:]')_LOG"
 		cat >"${STUB_BIN}/${tool}" <<EOF
@@ -122,6 +144,21 @@ exit 0
 EOF
 		chmod +x "${STUB_BIN}/${tool}"
 	done
+
+	# systemctl logs like the rest, and additionally does the one thing the
+	# script checks for afterwards: `--global enable` links the unit into
+	# /etc/systemd/user/. A stub that only logged would fail that assertion.
+	cat >"${STUB_BIN}/systemctl" <<EOF
+#!/usr/bin/bash
+printf '%s\n' "\$*" >> "\${SYSTEMCTL_LOG}"
+if [[ "\$1" == "--global" && "\$2" == "enable" ]]; then
+    mkdir -p "${ROOT}/etc/systemd/user/sockets.target.wants"
+    ln -sf "/usr/lib/systemd/user/\$3" \
+        "${ROOT}/etc/systemd/user/sockets.target.wants/\$3"
+fi
+exit 0
+EOF
+	chmod +x "${STUB_BIN}/systemctl"
 }
 
 teardown() {
@@ -222,6 +259,63 @@ teardown() {
 @test "60-niri-noctalia: fails when niri's portal configuration is missing" {
 	rm -f "${ROOT}/usr/share/xdg-desktop-portal/niri-portals.conf"
 	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
+}
+
+@test "60-niri-noctalia: fails when the GTK templates are gone from the shell" {
+	# custom/config/noctalia/ names gtk3 and gtk4 by id. Dropped upstream,
+	# they become two ignored lines rather than an error, and GTK applications
+	# quietly stop following the palette.
+	rm -f "${ROOT}/usr/share/noctalia/assets/templates/gtk/gtk4.css"
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
+}
+
+@test "60-niri-noctalia: fails when the GTK 3 theme the templates expect is gone" {
+	# Nothing requires adw-gtk3-theme, so a base-image change could drop it.
+	# The templates' apply hook skips setting gtk-theme when it is missing.
+	rm -rf "${ROOT}/usr/share/themes/adw-gtk3-dark"
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
+}
+
+@test "60-niri-noctalia: installs the GTK 3 theme the templates apply" {
+	run bash "${SCRIPT}"
+	[ "$status" -eq 0 ]
+
+	grep -qx -- 'install -y adw-gtk3-theme' "${DNF5_LOG}"
+}
+
+@test "60-niri-noctalia: validates the Noctalia defaults seeded into /etc/skel" {
+	# The overlay phase put them there; this is the only point in the build
+	# where the shell exists to check them. An unknown key or a bad value
+	# would be a broken config in every account created from the skeleton.
+	run bash "${SCRIPT}"
+	[ "$status" -eq 0 ]
+
+	grep -qx "config validate ${ROOT}/etc/skel/.config/noctalia" "${NOCTALIA_LOG}"
+}
+
+@test "60-niri-noctalia: fails when Noctalia rejects the seeded defaults" {
+	cat >"${STUB_BIN}/noctalia" <<'EOF'
+#!/usr/bin/bash
+printf '%s\n' "$*" >> "${NOCTALIA_LOG}"
+[[ "$1" == "config" ]] && exit 1
+exit 0
+EOF
+	chmod +x "${STUB_BIN}/noctalia"
+
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
+}
+
+@test "60-niri-noctalia: skips the check when a fork ships no Noctalia defaults" {
+	# custom/config/noctalia/ is a seam, not a requirement.
+	rm -rf "${ROOT}/etc/skel/.config/noctalia"
+	run bash "${SCRIPT}"
+	[ "$status" -eq 0 ]
+
+	run grep -q "config validate" "${NOCTALIA_LOG}"
 	[ "$status" -ne 0 ]
 }
 
@@ -393,6 +487,25 @@ EOF
 	grep -qx 'Environment=GREETER_USER=greetd' "${unit}"
 }
 
+@test "60-niri-noctalia: fails when the overlaid greeter helper is not executable" {
+	# rsync carries the mode across; a lost execute bit would ship a greeter
+	# with no keyboard layout, which reads as a rejected password.
+	chmod -x "${ROOT}/usr/libexec/noctiri-greeter-setup.sh"
+
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
+}
+
+@test "60-niri-noctalia: the state-directory unit runs the template's helper every boot" {
+	local unit="${REPO_ROOT}/custom/files/usr/lib/systemd/system/noctalia-greeter-setup.service"
+
+	grep -qx 'ExecStart=/usr/libexec/noctiri-greeter-setup.sh' "${unit}"
+	# A ConditionPathExists guard would pin the greeter to the layout the
+	# machine had on its first boot, so `localectl set-x11-keymap` would never
+	# reach the login screen.
+	! grep -q '^ConditionPathExists=' "${unit}"
+}
+
 @test "60-niri-noctalia: the unit names the same greeter account as greetd's config" {
 	run bash "${SCRIPT}"
 	[ "$status" -eq 0 ]
@@ -403,6 +516,32 @@ EOF
 	config_user="$(sed -nE 's/^user = "(.+)"$/\1/p' "${ROOT}/etc/greetd/config.toml")"
 	[ -n "${unit_user}" ]
 	[ "${unit_user}" = "${config_user}" ]
+}
+
+@test "60-niri-noctalia: enables gcr's SSH agent for every user" {
+	# gnome-session used to start an agent; the GNOME removal above took it
+	# away and niri starts nothing. --global is what makes it a default for
+	# every account rather than one the first user has to discover.
+	run bash "${SCRIPT}"
+	[ "$status" -eq 0 ]
+
+	grep -qx -- '--global enable gcr-ssh-agent.socket' "${SYSTEMCTL_LOG}"
+	[ -L "${ROOT}/etc/systemd/user/sockets.target.wants/gcr-ssh-agent.socket" ]
+}
+
+@test "60-niri-noctalia: installs the package that owns the SSH agent" {
+	run bash "${SCRIPT}"
+	[ "$status" -eq 0 ]
+
+	grep -qx -- 'install -y gcr' "${DNF5_LOG}"
+}
+
+@test "60-niri-noctalia: fails when gcr ships no socket unit to enable" {
+	# Nothing requires gcr, so a base-image change could drop it. Enabling a
+	# unit that is not there would otherwise leave the session with no agent.
+	rm -f "${ROOT}/usr/lib/systemd/user/gcr-ssh-agent.socket"
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
 }
 
 @test "60-niri-noctalia: clears the dangling display-manager alias before enabling greetd" {
