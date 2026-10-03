@@ -52,6 +52,10 @@ Applications and the utilities the session calls:
 - **ghostty** — the terminal, from the `scottames/ghostty` COPR, installed
   isolated so the repository is not left enabled in the image
 - **nautilus** — the file manager, inherited from Bluefin and kept explicitly
+- **adw-gtk3-theme** — inherited the same way, and kept explicitly because
+  nothing requires it: it is the GTK 3 theme Noctalia's templates apply
+- **gcr** — inherited and kept explicitly for the same reason: it owns
+  `gcr-ssh-agent.socket`, the SSH agent that left with `gnome-session`
 - **gnome-keyring**, **gnome-keyring-pam** — Secret Service, unlocked at login
 - **upower**, **ddcutil** — battery readings, and brightness on external
   monitors over DDC/CI
@@ -85,6 +89,10 @@ network connection:
   It is the highest-precedence file in the XDG association chain, so it wins
   over the base image's defaults. An account that already exists keeps its own
   copy; `ujust install-config` applies this one, backing up what it replaces
+- `~/.config/noctalia/10-theme-templates.toml` — seeded the same way from
+  [`custom/config/`](custom/config/noctalia/10-theme-templates.toml), turning on
+  the Noctalia templates that carry the session's colour scheme into GTK
+  applications. Its own comments cover the rest
 - `/etc/niri/config.kdl` — the image's niri configuration, shipped through
   [`custom/files/`](custom/files/etc/niri/config.kdl) and validated by
   `niri validate` during the build, so a broken config fails CI rather than
@@ -93,8 +101,9 @@ network connection:
   greetd's own service account
 - `/etc/pam.d/greetd` — a required `pam_systemd.so` session line, so the
   greeter gets the logind session it needs to reach the seat
-- `noctalia-greeter-setup.service` — creates `/var/lib/noctalia-greeter` on
-  first boot, because `90-cleanup.sh` prunes `/var` out of the image
+- `noctalia-greeter-setup.service` — creates `/var/lib/noctalia-greeter`,
+  because `90-cleanup.sh` prunes `/var` out of the image, and syncs the
+  greeter's keyboard layout from `localed` on every boot
 - `display-manager.service` now points at `greetd`
 - `os-release` carries `VARIANT="Niri"` / `VARIANT_ID=niri`
 
@@ -175,6 +184,35 @@ needing a root shell.
 `greeter.toml` the first time the machine boots. It has to happen there rather
 than at build time: `build/90-cleanup.sh` prunes `/var`, so nothing written
 under it during the build survives into the shipped image.
+
+#### Its keyboard layout
+
+The same unit fills in `[keyboard]`, and that one is not cosmetic.
+
+The greeter's compositor builds its keymap with `xkb_keymap_new_from_names` and
+reads no `locale1` state of its own, so a `greeter.toml` without a `[keyboard]`
+section — which is exactly what the vendor's `--setup-system` writes — leaves
+libxkbcommon on its built-in default of `us`. On any other layout the password
+is then typed through the wrong keymap and greetd rejects it as a PAM
+`AUTH_ERR`, which is indistinguishable from getting the password wrong.
+
+niri behaves the opposite way, which is why
+[`/etc/niri/config.kdl`](custom/files/etc/niri/config.kdl) leaves its `xkb`
+block empty: the session follows the machine unaided, the login screen does not.
+
+[`/usr/libexec/noctiri-greeter-setup.sh`](custom/files/usr/libexec/noctiri-greeter-setup.sh)
+closes the gap. It reads `XKBLAYOUT`, `XKBVARIANT` and `XKBOPTIONS` from
+`/etc/vconsole.conf`, falls back to Xorg's `00-keyboard.conf`, and rewrites just
+those three keys — so `numlock` and anything else you put in `[keyboard]`
+survives. `localectl` stays the single place to change it:
+
+```bash
+sudo localectl set-x11-keymap ch pc105 fr
+sudo systemctl restart noctalia-greeter-setup.service
+```
+
+A machine that configures no X11 keymap is left alone rather than pinned to a
+layout it never asked for.
 
 #### On the Terra dependency
 
@@ -343,10 +381,23 @@ surprises:
 - **An unfamiliar login screen.** That is Noctalia Greeter: see
   [The greeter](#the-greeter). Log in and niri starts; if it does not,
   `journalctl -b -u greetd` and `journalctl --user -u niri` have the reason.
+- **The greeter rejects a password you know is right.** Check the layout before
+  the account: `grep -A4 '^\[keyboard\]' /var/lib/noctalia-greeter/greeter.toml`
+  against `localectl status`. A greeter with no `[keyboard]` section types on a
+  US keymap; `systemctl status noctalia-greeter-setup.service` says why it did
+  not get one. A text login on `Ctrl+Alt+F3` uses the console keymap instead,
+  so it working there confirms the layout rather than the password.
 - **A greeter that does not match your desktop theme.** Run
   `noctalia msg greeter-sync` from the session. If the state directory is
   missing entirely, `systemctl status noctalia-greeter-setup.service` says
   why it did not run.
+- **`git push` over SSH fails with `Permission denied (publickey)`.** Check the
+  agent before the key: `ssh-add -l` answering `Error connecting to agent` means
+  `gcr-ssh-agent.socket` is not running. The image enables it for every user, so
+  a `systemctl --user is-enabled gcr-ssh-agent.socket` that says `disabled` is
+  an account that turned it off; `systemctl --user enable --now
+  gcr-ssh-agent.socket` puts it back. A passphrased key is cached in the login
+  keyring, which `pam_gnome_keyring` unlocks at login
 - **A bar-less, wallpaper-less niri.** Noctalia is started by niri through
   `spawn-at-startup` in `/etc/niri/config.kdl`. A `~/.config/niri/config.kdl`
   copied from an older image, or from upstream niri, will not have that line.
