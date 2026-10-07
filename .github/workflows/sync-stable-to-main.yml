@@ -26,7 +26,7 @@ concurrency:
 jobs:
   sync:
     name: Keep main up-to-date with stable
-    uses: projectbluefin/actions/.github/workflows/reusable-sync-branches.yml@ae7d740d261d56354aeaf0a72af6f87e442e0472 # v1
+    uses: projectbluefin/actions/.github/workflows/reusable-sync-branches.yml@fae71ae9b9d9244639a89507641c6509f250c7b6 # v1
     permissions:
       contents: write
     with:

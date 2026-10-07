@@ -36,7 +36,7 @@ concurrency:
 jobs:
   promote:
     name: Promote main to stable
-    uses: projectbluefin/actions/.github/workflows/reusable-promote-squash.yml@ae7d740d261d56354aeaf0a72af6f87e442e0472 # v1
+    uses: projectbluefin/actions/.github/workflows/reusable-promote-squash.yml@fae71ae9b9d9244639a89507641c6509f250c7b6 # v1
     with:
       variants: >-
         [{"image":"${{ github.event.repository.name }}"}]
@@ -233,7 +233,7 @@ jobs:
       issues: write
       packages: read
       pull-requests: write
-    uses: projectbluefin/actions/.github/workflows/reusable-release-gate.yml@ae7d740d261d56354aeaf0a72af6f87e442e0472 # v1
+    uses: projectbluefin/actions/.github/workflows/reusable-release-gate.yml@fae71ae9b9d9244639a89507641c6509f250c7b6 # v1
     with:
       repo: ${{ github.repository }}
       pr_number: ${{ needs.locate-promotion-pr.outputs.pr_number }}
