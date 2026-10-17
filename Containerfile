@@ -37,8 +37,8 @@
 
 # OCI context images - imported below and pinned directly in their FROM lines.
 # The base image is pinned in the FROM line below and updated by Renovate.
-FROM ghcr.io/projectbluefin/common:latest@sha256:27b1c4b22e642a7f2f1bb53aaadd0c1bfda2b93dd59f00b50afb1cede768da84 AS common
-FROM ghcr.io/ublue-os/brew:latest@sha256:e9a72571b7644b6277f0638b6a3c5e497e265e1098ab91224567acbdeb8b74ea AS brew
+FROM ghcr.io/projectbluefin/common:latest@sha256:a7f12724640161bd41e572198fb600b0876bf27edae447f70ab278e3844e87c0 AS common
+FROM ghcr.io/ublue-os/brew:latest@sha256:5bdf54dc7c21c22db29df6550e3711788719c5123549ea6dc5645d5af47795e3 AS brew
 
 # Context stage - combine local and imported OCI container resources
 FROM scratch AS ctx
@@ -63,7 +63,7 @@ COPY --from=brew /system_files /oci/brew
 # un-overlaid as before: the base applied it, and it is mostly GNOME dconf.
 #
 # Renovate will keep the digest pin up to date.
-FROM ghcr.io/ublue-os/bluefin-dx:stable@sha256:6ae6823bc1ddcd791b0570571224324fe735345349491c934591619e02bc3341
+FROM ghcr.io/ublue-os/bluefin-dx:stable@sha256:a41cf1ebc4b6718cab813f221b8394c963ed3f0777b52e19fe6c3784b15c52ed
 
 # Image identity - these define how bootc, fastfetch, and the ublue ecosystem
 # recognize your image. Change these to match your project name.
