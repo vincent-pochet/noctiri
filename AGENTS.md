@@ -25,6 +25,14 @@ auto-opened squash PR, and `stable` hotfixes sync back to `main`. `stable` takes
 no direct commits. The README owns the release table and the promotion gate's
 current limits.
 
+## Pull request descriptions
+
+Synthetic. A few short paragraphs: what changed, the one decision worth
+defending, and the checks that ran. No section headings, no restatement of the
+diff, no test matrix — the Files tab and the checks tab already carry those.
+Detail that has to survive belongs in the commit message or in a comment next
+to the code, not in a description nobody reads twice.
+
 ## Pull request comments
 
 One comment per PR event; fold new findings into the existing one. Report what

@@ -58,6 +58,17 @@ copr_install_isolated "scottames/ghostty" ghostty
 # because /etc/niri/config.kdl binds Mod+E to it.
 dnf5 install -y nautilus
 
+# Also from the base image, and nothing requires it, so it would leave silently.
+# It is the GTK 3 half of Noctalia's gtk3/gtk4 templates: the templates' apply
+# hook sets gtk-theme to adw-gtk3 or adw-gtk3-dark and skips that step when the
+# theme is absent, leaving GTK 3 applications on Adwaita with a stylesheet
+# written for adw-gtk3. custom/config/noctalia/ turns those templates on.
+dnf5 install -y adw-gtk3-theme
+
+# Likewise unrequired by anything, and it owns the SSH agent this session runs:
+# see "Restore the SSH agent" below.
+dnf5 install -y gcr
+
 echo "::endgroup::"
 
 echo "::group:: Install the greeter"
@@ -180,6 +191,22 @@ fi
 rpm -q xdg-desktop-portal-gnome xdg-desktop-portal-gtk gnome-keyring
 test -f /usr/share/xdg-desktop-portal/niri-portals.conf
 
+# The builtin templates custom/config/noctalia/ selects, and the GTK 3 theme
+# their apply hook expects. A template dropped upstream would otherwise be a
+# line in a config file that Noctalia silently ignores.
+test -f /usr/share/noctalia/assets/templates/gtk/gtk3.css
+test -f /usr/share/noctalia/assets/templates/gtk/gtk4.css
+test -d /usr/share/themes/adw-gtk3-dark
+
+# The same argument as `niri validate` below, for the other half of the
+# session. The overlay phase seeded this from custom/config/, and an unknown
+# key or a bad value would be a broken Noctalia config in every new account.
+# Whole directory rather than a filename, so it follows the seam and not one
+# file; a fork that ships no Noctalia defaults has nothing to check.
+if [[ -d /etc/skel/.config/noctalia ]]; then
+	noctalia config validate /etc/skel/.config/noctalia
+fi
+
 # custom/files placed the config during the overlay phase; this is the first
 # point in the build where a compositor exists to check it.
 niri validate --config /etc/niri/config.kdl
@@ -196,6 +223,11 @@ test -x /usr/bin/noctalia-greeter-compositor
 test -d /usr/share/noctalia-greeter/assets
 test -x /usr/bin/noctalia-greeter-apply-appearance
 test -f /usr/share/polkit-1/actions/org.noctalia.greeter.apply-appearance.policy
+
+# From custom/files, via the overlay phase. rsync carries the mode across, and
+# a lost execute bit would leave the greeter with no state directory and no
+# keyboard layout -- the second of which reads as a rejected password.
+test -x /usr/libexec/noctiri-greeter-setup.sh
 
 echo "::endgroup::"
 
@@ -236,6 +268,37 @@ rm -f /etc/systemd/system/display-manager.service
 systemctl enable greetd.service
 
 systemctl set-default graphical.target
+
+echo "::endgroup::"
+
+echo "::group:: Restore the SSH agent"
+
+###############################################################################
+# Restore the SSH agent
+###############################################################################
+# gnome-session started an SSH agent; removing GNOME above took that with it,
+# and niri starts nothing in its place. Fedora ships gcr's agent disabled and
+# expects a desktop session to enable it, so without this the image has no
+# agent at all.
+#
+# The failure is quiet and reads as the user's own mistake. gcr's socket unit
+# still sets SSH_AUTH_SOCK to %t/gcr/ssh, so ssh is pointed at a socket nobody
+# is listening on: a passphrased key then fails with `Permission denied
+# (publickey)` while sitting in plain sight in ~/.ssh, and `ssh-add -l` answers
+# "Error connecting to agent". Nothing names the session as the cause.
+#
+# --global is what makes it every user's default: it links the unit into
+# /etc/systemd/user/, which each user's systemd instance reads. It stays a
+# default -- `systemctl --user disable gcr-ssh-agent.socket` masks it per user.
+#
+# Socket-activated, so enabling it costs nothing until something connects, and
+# the agent picks its passphrases up from the login keyring that
+# pam_gnome_keyring unlocks in /etc/pam.d/greetd.
+###############################################################################
+
+test -f /usr/lib/systemd/user/gcr-ssh-agent.socket
+systemctl --global enable gcr-ssh-agent.socket
+test -L /etc/systemd/user/sockets.target.wants/gcr-ssh-agent.socket
 
 echo "::endgroup::"
 
