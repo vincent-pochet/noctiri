@@ -84,9 +84,44 @@ json_field() {
     grep -q '^OSTREE_VERSION="44.20260907.1"$' "${OS_RELEASE}"
     grep -q '^IMAGE_ID="finpilot"$' "${OS_RELEASE}"
     grep -q '^IMAGE_VERSION="44.20260907.1"$' "${OS_RELEASE}"
-    grep -q '^DEFAULT_HOSTNAME="fedora"$' "${OS_RELEASE}"
-    grep -q '^ID=fedora$' "${OS_RELEASE}"
+    grep -q '^DEFAULT_HOSTNAME="finpilot"$' "${OS_RELEASE}"
+    grep -q '^ID="finpilot"$' "${OS_RELEASE}"
     grep -q '^ID_LIKE="fedora"$' "${OS_RELEASE}"
+    grep -q '^CPE_NAME="cpe:/o:projectbluefin:finpilot:44"$' "${OS_RELEASE}"
+}
+
+@test "00-image-info: keeps the base distro in the derivation chain" {
+    # Taking ID for this image would otherwise strip the base from os-release
+    # entirely. A base that already renamed itself off Fedora, as every ublue
+    # image does, has to survive in ID_LIKE ahead of its own ancestor.
+    sed -i 's/^ID=fedora$/ID=bluefin/' "${OS_RELEASE}"
+    run_script
+    [ "$status" -eq 0 ]
+
+    grep -q '^ID="finpilot"$' "${OS_RELEASE}"
+    grep -q '^ID_LIKE="bluefin fedora"$' "${OS_RELEASE}"
+}
+
+@test "00-image-info: does not list the image as its own ancestor" {
+    sed -i 's/^ID=fedora$/ID=bluefin/' "${OS_RELEASE}"
+    run_script
+    [ "$status" -eq 0 ]
+    run_script
+    [ "$status" -eq 0 ]
+
+    grep -q '^ID_LIKE="bluefin fedora"$' "${OS_RELEASE}"
+    run grep -c '^ID_LIKE=' "${OS_RELEASE}"
+    [ "$output" -eq 1 ]
+}
+
+@test "00-image-info: omits ID_LIKE when the base declares no ancestry" {
+    sed -i '/^ID=/d; /^ID_LIKE=/d' "${OS_RELEASE}"
+    run_script
+    [ "$status" -eq 0 ]
+
+    grep -q '^ID="finpilot"$' "${OS_RELEASE}"
+    run grep -c '^ID_LIKE=' "${OS_RELEASE}"
+    [ "$output" -eq 0 ]
 }
 
 @test "00-image-info: derives GitHub URLs from image identity" {
@@ -138,6 +173,10 @@ json_field() {
     run grep -c '^VARIANT_ID=' "${OS_RELEASE}"
     [ "$output" -eq 1 ]
     run grep -c '^IMAGE_ID=' "${OS_RELEASE}"
+    [ "$output" -eq 1 ]
+    run grep -c '^DEFAULT_HOSTNAME=' "${OS_RELEASE}"
+    [ "$output" -eq 1 ]
+    run grep -c '^CPE_NAME=' "${OS_RELEASE}"
     [ "$output" -eq 1 ]
 }
 
