@@ -99,6 +99,10 @@ network connection:
   [`custom/config/`](custom/config/noctalia/10-theme-templates.toml), turning on
   the Noctalia templates that carry the session's colour scheme into GTK
   applications. Its own comments cover the rest
+- `~/.config/noctalia/20-polkit-agent.toml` — seeded the same way from
+  [`custom/config/`](custom/config/noctalia/20-polkit-agent.toml), turning on
+  Noctalia's authentication agent, which is what draws the password prompt for
+  a privileged action. Its own comments cover the rest
 - `/etc/niri/config.kdl` — the image's niri configuration, shipped through
   [`custom/files/`](custom/files/etc/niri/config.kdl) and validated by
   `niri validate` during the build, so a broken config fails CI rather than

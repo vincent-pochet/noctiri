@@ -32,5 +32,12 @@ down. `build/60-niri-noctalia.sh` runs `noctalia config validate` over the
 seeded directory, so an unknown key fails the build instead of every new
 account.
 
+`noctalia/20-polkit-agent.toml` turns on Noctalia's built-in Polkit
+authentication agent. Removing GNOME removed gnome-shell, which was the only
+agent on the system, and niri starts none: without this, every privileged
+action from the session -- `noctalia msg greeter-sync` first among them -- dies
+in `pkexec`'s textual fallback looking for a `/dev/tty` a graphical caller does
+not have. The file's own comments cover the rest.
+
 `environment.d/10-example.conf` is the shipped example: inert as written, and
 safe to replace.
