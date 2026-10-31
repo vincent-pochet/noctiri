@@ -3,9 +3,10 @@ name: Promote main to stable
 
 # Two-branch model: `main` is the testing branch (publishes :stable-testing and
 # :testing); `stable` is the production branch. The shared factory workflow
-# opens (or refreshes) a squash promotion PR from `main` to `stable` daily, or
-# when a maintainer dispatches it. Merging that PR triggers digest promotion in
-# execute-release.yml; it does not rebuild `:stable`.
+# opens (or refreshes) a squash promotion PR from `main` to `stable` on every
+# push to main, daily, or when a maintainer dispatches it. Merging that PR
+# triggers digest promotion in execute-release.yml; it does not rebuild
+# `:stable`.
 #
 # Reusable logic lives in projectbluefin/actions — this is a thin caller,
 # matching the pattern in projectbluefin/bluefin and projectbluefin/bluefin-lts.
@@ -16,6 +17,28 @@ on:
   schedule:
     # Default daily promotion window. Fork owners may change this cadence.
     - cron: "0 4 * * *"
+  # Any commit that moves main's tree invalidates an open promotion PR: the
+  # branch keeps the tree main had when it was built, and both push-triggered
+  # workflows on stable compare that tree against main's at merge time.
+  # execute-release.yml refuses to resolve the mutable :testing tag ("main
+  # advanced beyond release commit") and sync-stable-to-main.yml sees a
+  # divergence it can only clear by force-resetting a protected branch, so a
+  # stale merge fails both. Re-running the promotion on each push rebuilds the
+  # branch on main's current tree and re-runs the gate, leaving the PR a
+  # maintainer merges current with main by construction rather than by timing.
+  #
+  # It also revives pr-validation.yml's promotion guard, which compares the
+  # same trees but only re-evaluates on a pull_request event: main advancing
+  # does not re-run it, so a PR opened against an older main keeps a stale
+  # green `validate`. The force-push below is a `synchronize`, so the guard
+  # runs again against the tree the maintainer is about to merge.
+  #
+  # Deliberately unfiltered: build-image.yml's paths-ignore does not apply
+  # here. A markdown-only commit publishes no new image but still moves main's
+  # tree, which is what those guards compare.
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -31,7 +54,11 @@ permissions:
 
 concurrency:
   group: promote-main-to-stable
-  cancel-in-progress: false
+  # Rebuilding the branch is idempotent and only main's newest tree matters, so
+  # a later run supersedes one still in flight. Queueing instead would leave a
+  # Renovate burst on main with several full promote-and-gate runs pending,
+  # each rebuilding the branch the next one immediately replaces.
+  cancel-in-progress: true
 
 jobs:
   promote:
