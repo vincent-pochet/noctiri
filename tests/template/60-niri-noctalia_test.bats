@@ -28,6 +28,7 @@ setup() {
 	NIRI_LOG="${TEST_ROOT}/logs/niri.log"
 	NOCTALIA_LOG="${TEST_ROOT}/logs/noctalia.log"
 	CURL_LOG="${TEST_ROOT}/logs/curl.log"
+	DESKTOP_FILE_VALIDATE_LOG="${TEST_ROOT}/logs/desktop-file-validate.log"
 
 	mkdir -p "${STUB_BIN}" "${TEST_ROOT}/logs" "${CTX}/build"
 
@@ -42,6 +43,7 @@ setup() {
 		"${ROOT}/usr/share/noctalia/assets/templates/gtk" \
 		"${ROOT}/usr/share/themes/adw-gtk3-dark" \
 		"${ROOT}/usr/share/polkit-1/actions" \
+		"${ROOT}/usr/share/applications" \
 		"${ROOT}/etc/skel/.config/noctalia" \
 		"${ROOT}/usr/bin" \
 		"${ROOT}/usr/lib" \
@@ -88,6 +90,14 @@ setup() {
 	install -m0755 "${REPO_ROOT}/custom/files/usr/libexec/noctiri-greeter-setup.sh" \
 		"${ROOT}/usr/libexec/noctiri-greeter-setup.sh"
 
+	# Same phase, the other half of the connection editor: the entry ships in
+	# custom/files, the binary comes from the package installed by this script.
+	install -m0644 \
+		"${REPO_ROOT}/custom/files/usr/share/applications/nm-connection-editor.desktop" \
+		"${ROOT}/usr/share/applications/nm-connection-editor.desktop"
+	printf '#!/usr/bin/bash\nexit 0\n' >"${ROOT}/usr/bin/nm-connection-editor"
+	chmod +x "${ROOT}/usr/bin/nm-connection-editor"
+
 	# The vendor's PAM helper: adds the session line, leaves a backup.
 	cat >"${ROOT}/usr/share/noctalia-greeter/setup_greetd_pam.sh" <<EOF
 #!/usr/bin/bash
@@ -108,6 +118,7 @@ EOF
 
 	export PATH="${STUB_BIN}:${PATH}"
 	export DNF5_LOG SYSTEMCTL_LOG RPM_LOG NIRI_LOG NOCTALIA_LOG CURL_LOG
+	export DESKTOP_FILE_VALIDATE_LOG
 
 	# curl writes the key the script fingerprints; gpg reports the pinned one.
 	# TERRA_FINGERPRINT lets a test make them disagree.
@@ -144,6 +155,17 @@ exit 0
 EOF
 		chmod +x "${STUB_BIN}/${tool}"
 	done
+
+	# Its name cannot become a shell variable, so it stubs on its own. It
+	# reports a missing file the way the real one does, which is what the
+	# script leans on to check the entry arrived.
+	cat >"${STUB_BIN}/desktop-file-validate" <<'EOF'
+#!/usr/bin/bash
+printf '%s\n' "$*" >> "${DESKTOP_FILE_VALIDATE_LOG}"
+[[ -f "$1" ]] || { printf '%s: file does not exist\n' "$1" >&2; exit 1; }
+exit 0
+EOF
+	chmod +x "${STUB_BIN}/desktop-file-validate"
 
 	# systemctl logs like the rest, and additionally does the one thing the
 	# script checks for afterwards: `--global enable` links the unit into
@@ -602,4 +624,47 @@ EOF
 	run bash "${SCRIPT}"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"NULLGLOB_OFF"* ]]
+}
+
+@test "60-niri-noctalia: installs the NetworkManager connection editor" {
+	# Noctalia's own network panel can only join a network. Nothing else in the
+	# image can edit one, and nothing requires this package, so it has to be
+	# named or it leaves with the next base image.
+	run bash "${SCRIPT}"
+	[ "$status" -eq 0 ]
+
+	grep -qx 'install -y nm-connection-editor' "${DNF5_LOG}"
+}
+
+@test "60-niri-noctalia: keeps the connection editor out of the GNOME removal" {
+	run bash "${SCRIPT}"
+	[ "$status" -eq 0 ]
+
+	local removal
+	removal="$(grep -E '^remove -y ' "${DNF5_LOG}")"
+	[[ "${removal}" != *"nm-connection-editor"* ]]
+}
+
+@test "60-niri-noctalia: validates the connection editor's launcher entry" {
+	# Fedora ships no desktop file for it, so custom/files supplies one and the
+	# two halves only meet here.
+	run bash "${SCRIPT}"
+	[ "$status" -eq 0 ]
+
+	grep -qx "${ROOT}/usr/share/applications/nm-connection-editor.desktop" \
+		"${DESKTOP_FILE_VALIDATE_LOG}"
+}
+
+@test "60-niri-noctalia: fails when the connection editor has no launcher entry" {
+	# The editor would still be installed and still be unreachable: no bar
+	# widget, no launcher result, nothing but a terminal knows the name.
+	rm -f "${ROOT}/usr/share/applications/nm-connection-editor.desktop"
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
+}
+
+@test "60-niri-noctalia: fails when the connection editor binary is missing" {
+	rm -f "${ROOT}/usr/bin/nm-connection-editor"
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
 }
