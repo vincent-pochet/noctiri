@@ -1,0 +1,24 @@
+# Fedora's nm-connection-editor package ships the binary and no desktop entry:
+# on a GNOME system the Settings panel is the way in, and 60-niri-noctalia.sh
+# removes that. Without this file the editor exists but nothing can launch it.
+#
+# Upstream's nm-connection-editor.desktop.in, with GNOME dropped from
+# Categories -- the session is gone, and `GNOME` is a reserved category that
+# desktop-file-validate rejects unless OnlyShowIn names it. Keywords are added
+# here: the application's name says "Network Configuration", while the thing
+# sending a user to it is a Wi-Fi password or a static IP.
+[Desktop Entry]
+Type=Application
+Name=Advanced Network Configuration
+Comment=Manage and change your network connection settings
+Keywords=network;wifi;wi-fi;wireless;ethernet;vpn;connection;ip;dns;proxy;
+Icon=preferences-system-network
+Exec=nm-connection-editor
+Terminal=false
+StartupNotify=true
+Categories=GTK;Settings;
+Actions=create;
+
+[Desktop Action create]
+Name=New Connection
+Exec=nm-connection-editor --create
