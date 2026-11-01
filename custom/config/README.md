@@ -39,5 +39,13 @@ action from the session -- `noctalia msg greeter-sync` first among them -- dies
 in `pkexec`'s textual fallback looking for a `/dev/tty` a graphical caller does
 not have. The file's own comments cover the rest.
 
+`kdeglobals` gives Qt applications that read KDE's settings a font. Flatpaks on
+the KDE runtime, VLC among them, run with `QT_QPA_PLATFORMTHEME=kde` and read
+this file; without a font in it they use KDE's Noto Sans 10, a size below GTK.
+It names the base image's GTK defaults, Adwaita Sans 11 and JetBrains Mono 11,
+in the 10-field Qt 5 font string, the only one the KDE 5.15 runtime parses.
+Noctalia's `kcolorscheme` template, when a user turns it on, merges its colour
+groups into the same file and keeps these keys and the comments.
+
 `environment.d/10-example.conf` is the shipped example: inert as written, and
 safe to replace.
