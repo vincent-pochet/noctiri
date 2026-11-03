@@ -71,6 +71,33 @@ dnf5 install -y gcr
 
 echo "::endgroup::"
 
+echo "::group:: Install the network connection editor"
+
+###############################################################################
+# Editing a network connection
+###############################################################################
+# Noctalia's network panel is connect-only, and its string catalogue is the
+# whole surface: connect, password, the 802.1X fields, and status. There is no
+# forget, no static address, no DNS, no autoconnect or metered flag. The shell
+# drives NetworkManager over D-Bus but exposes no editor, and the editor GNOME
+# supplied was gnome-control-center, removed below.
+#
+# nm-connection-editor is NetworkManager's own, and the gap's exact shape:
+# addressing, routes, 802.1X, autoconnect, metered, and the VPN types the
+# NetworkManager-*-gnome packages in this image provide. Those packages are
+# editor plugins -- without the editor nothing in the image can create a VPN
+# profile, only toggle one that already exists.
+#
+# It is in the base image already and nothing requires it, so like nautilus and
+# gcr above it is one rebase from leaving silently; naming it is the point. It
+# links against GTK 3, libnm and libnma, and against nothing from gnome-shell
+# or gnome-session, so the GNOME removal below has no claim on it.
+###############################################################################
+
+dnf5 install -y nm-connection-editor
+
+echo "::endgroup::"
+
 echo "::group:: Install the greeter"
 
 ###############################################################################
@@ -190,6 +217,15 @@ fi
 # backends, which is why this image ships no portal config of its own.
 rpm -q xdg-desktop-portal-gnome xdg-desktop-portal-gtk gnome-keyring
 test -f /usr/share/xdg-desktop-portal/niri-portals.conf
+
+# The editor and the entry that launches it. Fedora's package ships no desktop
+# file, so that half comes from custom/files via the overlay phase: the two are
+# installed by different phases and meet for the first time here. Validating
+# rather than testing for the file covers both -- a missing file and a
+# malformed one are the same symptom, an application the launcher never shows.
+rpm -q nm-connection-editor
+test -x /usr/bin/nm-connection-editor
+desktop-file-validate /usr/share/applications/nm-connection-editor.desktop
 
 # The builtin templates custom/config/noctalia/ selects, and the GTK 3 theme
 # their apply hook expects. A template dropped upstream would otherwise be a
