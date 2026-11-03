@@ -56,6 +56,12 @@ Applications and the utilities the session calls:
   nothing requires it: it is the GTK 3 theme Noctalia's templates apply
 - **gcr** — inherited and kept explicitly for the same reason: it owns
   `gcr-ssh-agent.socket`, the SSH agent that left with `gnome-session`
+- **nm-connection-editor** — inherited and kept for the same reason again.
+  Noctalia's network panel joins a network but cannot edit one: no forget, no
+  static address, no DNS. This is NetworkManager's own editor, and the VPN
+  types the `NetworkManager-*-gnome` packages supply are its plugins. Fedora
+  ships it without a desktop entry, so `custom/files` adds one and it appears
+  in the launcher as **Advanced Network Configuration**
 - **gnome-keyring**, **gnome-keyring-pam** — Secret Service, unlocked at login
 - **upower**, **ddcutil** — battery readings, and brightness on external
   monitors over DDC/CI
@@ -93,6 +99,10 @@ network connection:
   [`custom/config/`](custom/config/noctalia/10-theme-templates.toml), turning on
   the Noctalia templates that carry the session's colour scheme into GTK
   applications. Its own comments cover the rest
+- `~/.config/noctalia/20-polkit-agent.toml` — seeded the same way from
+  [`custom/config/`](custom/config/noctalia/20-polkit-agent.toml), turning on
+  Noctalia's authentication agent, which is what draws the password prompt for
+  a privileged action. Its own comments cover the rest
 - `/etc/niri/config.kdl` — the image's niri configuration, shipped through
   [`custom/files/`](custom/files/etc/niri/config.kdl) and validated by
   `niri validate` during the build, so a broken config fails CI rather than
