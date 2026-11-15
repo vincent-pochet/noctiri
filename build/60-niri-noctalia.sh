@@ -98,6 +98,30 @@ dnf5 install -y nm-connection-editor
 
 echo "::endgroup::"
 
+echo "::group:: Install the printer manager"
+
+###############################################################################
+# Managing printers
+###############################################################################
+# The same gap as the connection editor, for printers. GNOME's Printers panel
+# was part of gnome-control-center, removed below, and Noctalia has no printing
+# surface at all. CUPS and cups-pk-helper are in the base image, so printing
+# works and an unprivileged tool can administer it through Polkit -- there is
+# just nothing graphical that does. What was left was localhost:631 in a
+# browser.
+#
+# system-config-printer is Fedora's printer tool: add a queue, pick a driver,
+# set the default, watch jobs. It is GTK 3 and Python, links against nothing
+# from gnome-shell or gnome-session, and asks for privileges through
+# cups-pk-helper -- the password prompt is Noctalia's Polkit agent, which
+# custom/config/noctalia/20-polkit-agent.toml turns on. Unlike
+# nm-connection-editor it ships its own desktop entry, as "Print Settings".
+###############################################################################
+
+dnf5 install -y system-config-printer
+
+echo "::endgroup::"
+
 echo "::group:: Install the greeter"
 
 ###############################################################################
@@ -226,6 +250,13 @@ test -f /usr/share/xdg-desktop-portal/niri-portals.conf
 rpm -q nm-connection-editor
 test -x /usr/bin/nm-connection-editor
 desktop-file-validate /usr/share/applications/nm-connection-editor.desktop
+
+# The printer manager and its entry, both from the one package. Checked for
+# the same reason: an entry that stops validating, or moves, is a tool the
+# launcher no longer shows.
+rpm -q system-config-printer
+test -x /usr/bin/system-config-printer
+desktop-file-validate /usr/share/applications/system-config-printer.desktop
 
 # The builtin templates custom/config/noctalia/ selects, and the GTK 3 theme
 # their apply hook expects. A template dropped upstream would otherwise be a

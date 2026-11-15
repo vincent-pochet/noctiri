@@ -98,6 +98,12 @@ setup() {
 	printf '#!/usr/bin/bash\nexit 0\n' >"${ROOT}/usr/bin/nm-connection-editor"
 	chmod +x "${ROOT}/usr/bin/nm-connection-editor"
 
+	# The printer manager, as its package leaves it: binary and entry together.
+	printf '[Desktop Entry]\nType=Application\nName=Print Settings\nExec=system-config-printer\n' \
+		>"${ROOT}/usr/share/applications/system-config-printer.desktop"
+	printf '#!/usr/bin/bash\nexit 0\n' >"${ROOT}/usr/bin/system-config-printer"
+	chmod +x "${ROOT}/usr/bin/system-config-printer"
+
 	# The vendor's PAM helper: adds the session line, leaves a backup.
 	cat >"${ROOT}/usr/share/noctalia-greeter/setup_greetd_pam.sh" <<EOF
 #!/usr/bin/bash
@@ -665,6 +671,35 @@ EOF
 
 @test "60-niri-noctalia: fails when the connection editor binary is missing" {
 	rm -f "${ROOT}/usr/bin/nm-connection-editor"
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
+}
+
+@test "60-niri-noctalia: installs the printer manager" {
+	# gnome-control-center's Printers panel leaves with GNOME and Noctalia has
+	# no replacement, so without this CUPS has no graphical front end.
+	run bash "${SCRIPT}"
+	[ "$status" -eq 0 ]
+
+	grep -qx 'install -y system-config-printer' "${DNF5_LOG}"
+}
+
+@test "60-niri-noctalia: validates the printer manager's launcher entry" {
+	run bash "${SCRIPT}"
+	[ "$status" -eq 0 ]
+
+	grep -qx "${ROOT}/usr/share/applications/system-config-printer.desktop" \
+		"${DESKTOP_FILE_VALIDATE_LOG}"
+}
+
+@test "60-niri-noctalia: fails when the printer manager has no launcher entry" {
+	rm -f "${ROOT}/usr/share/applications/system-config-printer.desktop"
+	run bash "${SCRIPT}"
+	[ "$status" -ne 0 ]
+}
+
+@test "60-niri-noctalia: fails when the printer manager binary is missing" {
+	rm -f "${ROOT}/usr/bin/system-config-printer"
 	run bash "${SCRIPT}"
 	[ "$status" -ne 0 ]
 }

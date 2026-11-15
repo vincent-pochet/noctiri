@@ -62,6 +62,8 @@ Applications and the utilities the session calls:
   types the `NetworkManager-*-gnome` packages supply are its plugins. Fedora
   ships it without a desktop entry, so `custom/files` adds one and it appears
   in the launcher as **Advanced Network Configuration**
+- **system-config-printer** — the printer manager, in the launcher as **Print
+  Settings**: add a printer, pick its driver, set the default, manage the queue
 - **gnome-keyring**, **gnome-keyring-pam** — Secret Service, unlocked at login
 - **upower**, **ddcutil** — battery readings, and brightness on external
   monitors over DDC/CI
