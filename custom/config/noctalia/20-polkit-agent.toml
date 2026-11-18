@@ -1,0 +1,27 @@
+# Answer the system's authentication prompts inside the session.
+#
+# Removing GNOME took gnome-shell with it, and gnome-shell was this system's
+# only Polkit authentication agent. polkitd keeps running -- it is the daemon
+# that decides -- but nothing is left registered to ask a human for a password,
+# and niri, like every other wlroots compositor, starts nothing in its place.
+#
+# The failure that leaves is not legible from its message. pkexec falls back to
+# a textual agent, which needs a controlling terminal, and a caller spawned by
+# the shell has none:
+#
+#   Error creating textual authentication agent: Error opening current
+#   controlling terminal for the process (`/dev/tty'): No such device or
+#   address
+#
+# `noctalia msg greeter-sync` is where it surfaces first -- the greeter's
+# Polkit action is auth_admin for every caller -- and nm-connection-editor
+# saving a system connection is the other one this image ships. Both read as a
+# broken feature rather than a missing agent.
+#
+# Noctalia carries an agent of its own and ships it off by default. Turned on,
+# it registers at /org/noctalia/PolkitAuthenticationAgent for the logind
+# session and draws the prompt like any other panel, so there is no second GTK
+# agent to install and nothing to keep running beside the shell.
+
+[shell]
+polkit_agent = true
