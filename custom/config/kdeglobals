@@ -1,0 +1,21 @@
+# Fonts for Qt applications that take their theme from KDE.
+#
+# Flatpaks built on the KDE runtime (VLC among them) run with
+# QT_QPA_PLATFORMTHEME=kde and read this file through their
+# xdg-config/kdeglobals permission. Without a font here they fall back to
+# KDE's own default, Noto Sans 10, which reads a size smaller than GTK.
+#
+# The families and sizes match the GTK defaults the base image sets in
+# zz0-bluefin-modifications.gschema.override: Adwaita Sans 11 for the
+# interface, JetBrains Mono 11 for monospace. The Qt 5 font-string format is
+# used because Qt 6 still parses it and the KDE 5.15 runtime only reads that.
+#
+# Noctalia's kcolorscheme template merges its colour groups into this file and
+# leaves these keys alone.
+
+[General]
+font=Adwaita Sans,11,-1,5,50,0,0,0,0,0
+menuFont=Adwaita Sans,11,-1,5,50,0,0,0,0,0
+smallestReadableFont=Adwaita Sans,9,-1,5,50,0,0,0,0,0
+toolBarFont=Adwaita Sans,10,-1,5,50,0,0,0,0,0
+fixed=JetBrains Mono,11,-1,5,50,0,0,0,0,0
