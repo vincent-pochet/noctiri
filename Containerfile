@@ -63,7 +63,7 @@ COPY --from=brew /system_files /oci/brew
 # un-overlaid as before: the base applied it, and it is mostly GNOME dconf.
 #
 # Renovate will keep the digest pin up to date.
-FROM ghcr.io/ublue-os/bluefin-dx:stable@sha256:cca4448a3138178afff93f142f25d8b61b8e4624636dd99fb800a977945a4fb4
+FROM ghcr.io/ublue-os/bluefin-dx:stable@sha256:cf6aa98cab602b7387c34f63eb7580a2a0b23afb7f72a1a8630dce2179b464c0
 
 # Image identity - these define how bootc, fastfetch, and the ublue ecosystem
 # recognize your image. Change these to match your project name.
